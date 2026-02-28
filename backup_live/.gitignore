@@ -1,0 +1,106 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+dashboard/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Documentation (keep only essential)
+COMPLETE_SYSTEM_GUIDE.md
+QUICK_START.md
+FIX_RESOLVE_BUTTON.md
+STEP_8_GOVT_SCHEMES_COMPLETE.md
+TASK_10_COMPLETE.md
+IMPLEMENTATION_COMPLETE.md
+MEDIMIND_FINAL_SUMMARY.md
+SIDEBAR_CLEAN_COMPLETE.md
+SCHEMES_SYNC_COMPLETE.md
+WHAT_WAS_DONE.md
+dashboard/DASHBOARD_COMPLETE.md
+dashboard/QUICK_START.md
+dashboard/START_DASHBOARD.md
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Backup files
+*.sql.backup
+*.py.backup
+
+# Node modules (if any)
+node_modules/
+
+# Compiled files
+*.pyc
+*.pyo
