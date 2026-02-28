@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 else:
     Client = None
 from dotenv import load_dotenv
+from datetime import datetime
+from report_generator import generate_pdf, generate_and_upload
 
 # Load environment variables
 load_dotenv('.env.doctor')
@@ -536,6 +538,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "`Dr. Shah | GJMC12345 | Anklav PHC`",
                 parse_mode='Markdown'
             )
+    
+    elif context.user_data.get('editing_report'):
+        # Doctor is editing the report
+        context.user_data['doctor_notes'] = text
+        context.user_data['editing_report'] = False
+        
+        # Show confirmation with PDF generation option
+        keyboard = [
+            [InlineKeyboardButton("✅ Generate PDF", callback_data="generate_pdf")],
+            [InlineKeyboardButton("📝 Edit Again", callback_data="edit_report")],
+            [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
+        ]
+        
+        await update.message.reply_text(
+            f"✅ **NOTES SAVED**\n\n"
+            f"Your notes:\n{text[:300]}...\n\n"
+            f"Ready to generate PDF?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
     else:
         # Unknown message
         await update.message.reply_text(
@@ -572,39 +595,48 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"Photo received from doctor {user.id}: {image_path}, mode: {mode}")
         
         # Analyze based on mode
+        result = ""
         if scan_type == "X-ray" and mode == "mode_14diseases":
             # 14-disease model + VLM + Hindi
             result = analyze_xray_14diseases(image_path)
-            await update.message.reply_text(result, parse_mode='Markdown')
             
         elif mode == "mode_fast":
             # Fast VLM (llava-llama3:8b)
             result = vlm_fast(image_path)
-            await update.message.reply_text(result, parse_mode='Markdown')
             
         elif mode == "mode_detailed":
             # Detailed VLM (llava:13b)
             result = vlm_detailed(image_path)
-            await update.message.reply_text(result, parse_mode='Markdown')
         
         else:
             await update.message.reply_text(
                 f"❌ Unknown mode: {mode}\n"
                 f"Please try again with /start → Analyze Image"
             )
+            return
         
-        # Clean up temp file
-        if os.path.exists(image_path):
-            os.remove(image_path)
-            logger.info(f"Cleaned up temp file: {image_path}")
+        # Store analysis result and image path for PDF generation
+        context.user_data['analysis_result'] = result
+        context.user_data['image_path'] = image_path
+        context.user_data['scan_type_analyzed'] = scan_type
+        context.user_data['mode_used'] = mode
         
-        # Clear context
-        context.user_data.pop('scan_type', None)
-        context.user_data.pop('mode', None)
+        # Show result with action buttons
+        keyboard = [
+            [InlineKeyboardButton("📝 Edit Report", callback_data="edit_report")],
+            [InlineKeyboardButton("✅ Generate PDF", callback_data="generate_pdf")],
+            [InlineKeyboardButton("🔄 Re-analyze", callback_data="analyze")],
+            [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
+        ]
         
-        # Show menu again
-        await asyncio.sleep(1)
-        await show_main_menu(update.message.chat_id, context)
+        await update.message.reply_text(
+            f"✅ **ANALYSIS COMPLETE**\n\n{result[:800]}...\n\n"
+            f"Choose next action:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Analysis complete for doctor {user.id}, awaiting action")
         
     except Exception as e:
         logger.error(f"Error processing photo: {e}")
@@ -793,6 +825,91 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         elif query.data == "back_menu":
             await show_main_menu(query.message.chat_id, context)
+        
+        elif query.data == "edit_report":
+            # Edit report - ask for doctor's notes
+            context.user_data['editing_report'] = True
+            
+            await query.edit_message_text(
+                "📝 **EDIT REPORT**\n\n"
+                "Current AI analysis:\n"
+                f"{context.user_data.get('analysis_result', 'No analysis')[:400]}...\n\n"
+                "Reply with your edited notes or additional observations:\n"
+                "(This will be added to the PDF report)",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == "generate_pdf":
+            # Generate PDF report
+            await query.edit_message_text("⏳ Generating PDF report...")
+            
+            try:
+                # Get doctor info
+                doctor = doctors.data[0] if doctors.data else {}
+                
+                # Prepare report data
+                report_data = {
+                    'patient_name': 'Test Patient',  # TODO: Get from queue
+                    'age': 45,
+                    'village': 'Test Village',
+                    'symptoms': 'Test symptoms',
+                    'diseases_detected': ['AI Analysis Results'],
+                    'ai_report': context.user_data.get('analysis_result', 'No analysis available'),
+                    'doctor_notes': context.user_data.get('doctor_notes', 'No additional notes'),
+                    'hindi_patient': context.user_data.get('hindi_report', 'Hindi translation pending'),
+                    'doctor_name': doctor.get('name', 'Doctor'),
+                    'doctor_mci': doctor.get('mci_reg', 'N/A'),
+                    'doctor_phc': doctor.get('phc', 'N/A'),
+                    'scan_date': datetime.now().strftime('%d/%m/%Y')
+                }
+                
+                # Generate PDF
+                os.makedirs('reports', exist_ok=True)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                pdf_filename = f"report_{timestamp}.pdf"
+                pdf_path = os.path.join('reports', pdf_filename)
+                
+                generate_pdf(report_data, pdf_path)
+                
+                logger.info(f"PDF generated: {pdf_path}")
+                
+                # Send PDF to doctor
+                with open(pdf_path, 'rb') as pdf_file:
+                    await context.bot.send_document(
+                        chat_id=query.message.chat_id,
+                        document=pdf_file,
+                        filename=pdf_filename,
+                        caption="✅ **PDF REPORT GENERATED**\n\n"
+                                "📄 Report ready for patient\n"
+                                "💾 Saved to dashboard\n\n"
+                                "TODO: Send to patient automatically",
+                        parse_mode='Markdown'
+                    )
+                
+                # Clean up temp image
+                image_path = context.user_data.get('image_path')
+                if image_path and os.path.exists(image_path):
+                    os.remove(image_path)
+                    logger.info(f"Cleaned up temp image: {image_path}")
+                
+                # Clear analysis context
+                context.user_data.pop('analysis_result', None)
+                context.user_data.pop('image_path', None)
+                context.user_data.pop('doctor_notes', None)
+                context.user_data.pop('scan_type', None)
+                context.user_data.pop('mode', None)
+                
+                # Show main menu
+                await asyncio.sleep(1)
+                await show_main_menu(query.message.chat_id, context)
+                
+            except Exception as e:
+                logger.error(f"Error generating PDF: {e}")
+                await query.edit_message_text(
+                    f"❌ Error generating PDF: {str(e)}\n\n"
+                    f"Please try again or contact admin.",
+                    parse_mode='Markdown'
+                )
         
         elif query.data == "logout":
             # Logout - clear session
