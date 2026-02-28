@@ -254,48 +254,54 @@ else:
     # TAB 2: MY REPORTS
     # ============================================
     with tab2:
-        st.header("📊 My Reports")
-        st.markdown("All X-ray reports you've reviewed")
+        st.header("📊 My Generated Reports")
+        st.markdown("PDF reports you've generated for patients")
         
         # Search filter
         search = st.text_input("🔍 Search patient name", placeholder="Enter patient name...")
         
-        # Status filter
-        status_filter = st.multiselect(
-            "Filter by status",
-            ["reviewed", "sent", "cancelled"],
-            default=["reviewed", "sent"]
+        # Date filter
+        date_filter = st.selectbox(
+            "Date Range",
+            ["All Time", "Today", "Last 7 Days", "Last 30 Days"],
+            help="Filter by report generation date"
         )
         
         try:
-            # Get all reports
-            reports_response = supabase.table("xray_requests").select("*").eq("doctor_phone", st.session_state.doctor_phone).order("created_at", desc=True).execute()
+            # Get only reports with PDF (generated reports)
+            # Get all requests first, then filter client-side
+            all_requests = supabase.table("xray_requests").select("*").eq("doctor_phone", st.session_state.doctor_phone).order("reviewed_at", desc=True).execute()
             
-            if reports_response.data:
-                # Filter by search and status
-                filtered_reports = reports_response.data
+            # Filter for only requests with reports
+            reports_data = [r for r in all_requests.data if r.get('report_pdf_url')] if all_requests.data else []
+            
+            # Apply date filter
+            if date_filter == "Today":
+                today = datetime.now().date().isoformat()
+                reports_data = [r for r in reports_data if r.get('reviewed_at', '').startswith(today)]
+            elif date_filter == "Last 7 Days":
+                week_ago = (datetime.now() - timedelta(days=7)).isoformat()
+                reports_data = [r for r in reports_data if r.get('reviewed_at', '') >= week_ago]
+            elif date_filter == "Last 30 Days":
+                month_ago = (datetime.now() - timedelta(days=30)).isoformat()
+                reports_data = [r for r in reports_data if r.get('reviewed_at', '') >= month_ago]
+            
+            if reports_data:
+                # Filter by search
+                filtered_reports = reports_data
                 
                 if search:
                     filtered_reports = [r for r in filtered_reports if search.lower() in r['patient_name'].lower()]
-                
-                if status_filter:
-                    filtered_reports = [r for r in filtered_reports if r.get('status') in status_filter]
                 
                 if filtered_reports:
                     st.success(f"📊 {len(filtered_reports)} report(s) found")
                     
                     # Display as expandable cards
                     for report in filtered_reports:
-                        status_emoji = {
-                            'pending': '⏳',
-                            'reviewed': '🔍',
-                            'sent': '✅',
-                            'cancelled': '❌'
-                        }
-                        
-                        emoji = status_emoji.get(report.get('status', 'pending'), '❓')
-                        
-                        with st.expander(f"{emoji} {report['patient_name']} ({report['age']}y) - {report.get('status', 'N/A')} - {report.get('created_at', 'N/A')[:10]}"):
+                        with st.expander(
+                            f"📄 {report['patient_name']} ({report['age']}y) - Generated: {report.get('reviewed_at', 'N/A')[:10]}",
+                            expanded=False
+                        ):
                             col1, col2 = st.columns(2)
                             
                             with col1:
@@ -305,41 +311,69 @@ else:
                                 st.markdown(f"**🩺 Symptoms:** {report.get('symptoms', 'N/A')}")
                             
                             with col2:
-                                st.markdown(f"**📅 Created:** {report.get('created_at', 'N/A')}")
-                                st.markdown(f"**✅ Reviewed:** {report.get('reviewed_at', 'N/A')}")
+                                st.markdown(f"**📅 Request Created:** {report.get('created_at', 'N/A')[:19]}")
+                                st.markdown(f"**✅ Report Generated:** {report.get('reviewed_at', 'N/A')[:19]}")
                                 st.markdown(f"**📊 Status:** {report.get('status', 'N/A')}")
-                                st.markdown(f"**🆔 ID:** {report['id']}")
+                                st.markdown(f"**🆔 Request ID:** {report['id']}")
+                                
+                                # Calculate turnaround time
+                                if report.get('created_at') and report.get('reviewed_at'):
+                                    try:
+                                        created = datetime.fromisoformat(report['created_at'].replace('Z', '+00:00'))
+                                        reviewed = datetime.fromisoformat(report['reviewed_at'].replace('Z', '+00:00'))
+                                        turnaround = reviewed - created
+                                        hours = int(turnaround.total_seconds() / 3600)
+                                        st.info(f"⏱️ Turnaround: {hours} hours")
+                                    except:
+                                        pass
                             
                             st.markdown("---")
                             
-                            if report.get('diseases_detected'):
-                                st.markdown(f"**🔬 Diseases Detected:** {report.get('diseases_detected')}")
-                            
-                            if report.get('confidence_scores'):
-                                st.markdown(f"**📊 Confidence Scores:** {report.get('confidence_scores')}")
-                            
                             if report.get('ai_report'):
-                                st.markdown(f"**🤖 AI Report:**")
-                                st.text_area("", report.get('ai_report', '')[:500], height=100, disabled=True, key=f"ai_{report['id']}")
+                                st.markdown(f"**🤖 AI Analysis:**")
+                                st.text_area("", report.get('ai_report', '')[:500] + "..." if len(report.get('ai_report', '')) > 500 else report.get('ai_report', ''), height=100, disabled=True, key=f"ai_{report['id']}")
                             
                             if report.get('doctor_notes'):
-                                st.markdown(f"**📝 Doctor Notes:**")
+                                st.markdown(f"**📝 Your Notes:**")
                                 st.text_area("", report.get('doctor_notes', ''), height=100, disabled=True, key=f"notes_{report['id']}")
                             
-                            if report.get('report_pdf_url'):
-                                st.download_button(
-                                    "📄 Download PDF Report",
-                                    report['report_pdf_url'],
-                                    file_name=f"{report['patient_name']}_xray_report.pdf",
-                                    key=f"download_{report['id']}"
-                                )
+                            st.markdown("---")
                             
-                            if report.get('image_url'):
-                                st.markdown(f"[🖼️ View X-Ray Image]({report['image_url']})")
+                            # Download PDF button
+                            pdf_path = report.get('report_pdf_url')
+                            if pdf_path and os.path.exists(pdf_path):
+                                with open(pdf_path, 'rb') as pdf_file:
+                                    pdf_data = pdf_file.read()
+                                    pdf_filename = os.path.basename(pdf_path)
+                                    
+                                    col1, col2 = st.columns([3, 1])
+                                    
+                                    with col1:
+                                        st.download_button(
+                                            label="📥 Download PDF Report",
+                                            data=pdf_data,
+                                            file_name=pdf_filename,
+                                            mime="application/pdf",
+                                            key=f"download_{report['id']}",
+                                            use_container_width=True
+                                        )
+                                    
+                                    with col2:
+                                        file_size = len(pdf_data) / 1024  # KB
+                                        st.info(f"💾 {file_size:.1f} KB")
+                            else:
+                                st.warning("⚠️ PDF file not found")
+                            
+                            if report.get('image_url') and os.path.exists(report.get('image_url')):
+                                st.markdown("**📸 X-Ray Image:**")
+                                try:
+                                    st.image(report['image_url'], width=300, caption=f"X-ray for {report['patient_name']}")
+                                except:
+                                    st.info("Could not load image")
                 else:
                     st.info("No reports match your search criteria")
             else:
-                st.info("📭 No reports yet")
+                st.info("📭 No reports generated yet. Complete X-ray requests to generate reports.")
         
         except Exception as e:
             st.error(f"❌ Error loading reports: {str(e)}")

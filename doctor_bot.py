@@ -152,6 +152,27 @@ Use short, simple sentences. Avoid complex medical terms.'''
         logger.error(f"Hindi translation error: {e}")
         return "❌ Hindi translation unavailable (sarvam-1 model not loaded)"
 
+def translate_hindi_message(english_text):
+    """🇮🇳 Translate doctor's message to Hindi"""
+    try:
+        response = ollama.chat(model='mashriram/sarvam-1', messages=[
+            {
+                'role': 'user',
+                'content': f'''Translate this doctor's message to simple Hindi:
+
+{english_text}
+
+Use simple, clear Hindi that rural patients can understand.
+Keep the same tone and meaning.'''
+            }
+        ])
+        
+        return response['message']['content']
+    
+    except Exception as e:
+        logger.error(f"Hindi translation error: {e}")
+        return "अनुवाद उपलब्ध नहीं है (Translation unavailable)"
+
 def analyze_xray_14diseases(image_path):
     """🎯 14-DISEASE MODEL + VLM reasoning + Hindi translation"""
     try:
@@ -559,6 +580,68 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
     
+    elif context.user_data.get('waiting_for_text'):
+        # Doctor is sending text message to patient
+        context.user_data['waiting_for_text'] = False
+        
+        patient_name = context.user_data.get('contact_patient_name', 'Patient')
+        patient_telegram_id = context.user_data.get('contact_patient_id')
+        
+        if not patient_telegram_id:
+            await update.message.reply_text("❌ Patient Telegram ID not found")
+            return
+        
+        await update.message.reply_text(
+            "⏳ Translating your message...\n"
+            "Please wait..."
+        )
+        
+        try:
+            # Translate to Hindi using Ollama sarvam-1 model
+            hindi_translation = translate_hindi_message(text)
+            
+            # Get doctor info
+            doctors = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
+            doctor_name = doctors.data[0].get('name', 'Doctor') if doctors.data else 'Doctor'
+            
+            # Send message to patient (both English and Hindi)
+            message_to_patient = (
+                f"📨 **Message from Dr. {doctor_name}**\n\n"
+                f"**English:**\n{text}\n\n"
+                f"**हिंदी:**\n{hindi_translation}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"🏥 Please follow your doctor's instructions"
+            )
+            
+            await context.bot.send_message(
+                chat_id=patient_telegram_id,
+                text=message_to_patient,
+                parse_mode='Markdown'
+            )
+            
+            # Confirm to doctor
+            await update.message.reply_text(
+                f"✅ **MESSAGE SENT**\n\n"
+                f"👤 To: {patient_name}\n\n"
+                f"**Your message (English):**\n{text}\n\n"
+                f"**Translation (Hindi):**\n{hindi_translation}\n\n"
+                f"📱 Both versions sent to patient",
+                parse_mode='Markdown'
+            )
+            
+            # Show main menu
+            await asyncio.sleep(2)
+            await show_main_menu(update.message.chat_id, context)
+            
+            logger.info(f"Text message sent from doctor {user.id} to patient {patient_telegram_id}")
+            
+        except Exception as e:
+            logger.error(f"Error sending text message: {e}")
+            await update.message.reply_text(
+                f"❌ Error sending message: {str(e)}\n\n"
+                f"Please try again or use voice note instead."
+            )
+    
     else:
         # Unknown message
         await update.message.reply_text(
@@ -678,6 +761,162 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if 'image_path' in locals() and os.path.exists(image_path):
             os.remove(image_path)
 
+async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle voice messages from doctor to patient"""
+    user = update.effective_user
+    
+    # Check if we're expecting a voice note
+    if not context.user_data.get('waiting_for_voice'):
+        await update.message.reply_text(
+            "❓ I'm not expecting a voice note right now.\n"
+            "Use /start to begin."
+        )
+        return
+    
+    context.user_data['waiting_for_voice'] = False
+    
+    patient_name = context.user_data.get('contact_patient_name', 'Patient')
+    patient_telegram_id = context.user_data.get('contact_patient_id')
+    
+    if not patient_telegram_id:
+        await update.message.reply_text("❌ Patient Telegram ID not found")
+        return
+    
+    await update.message.reply_text(
+        "⏳ Sending voice note to patient...\n"
+        "Please wait..."
+    )
+    
+    try:
+        # Get doctor info
+        doctors = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
+        doctor_name = doctors.data[0].get('name', 'Doctor') if doctors.data else 'Doctor'
+        
+        # Forward voice note to patient
+        voice = update.message.voice
+        
+        # Send voice with caption
+        await context.bot.send_voice(
+            chat_id=patient_telegram_id,
+            voice=voice.file_id,
+            caption=f"🎤 **Voice Message from Dr. {doctor_name}**\n\n"
+                    f"🏥 Please listen to your doctor's message",
+            parse_mode='Markdown'
+        )
+        
+        # Confirm to doctor
+        await update.message.reply_text(
+            f"✅ **VOICE NOTE SENT**\n\n"
+            f"👤 To: {patient_name}\n"
+            f"🎤 Voice message delivered successfully",
+            parse_mode='Markdown'
+        )
+        
+        # Show main menu
+        await asyncio.sleep(2)
+        await show_main_menu(update.message.chat_id, context)
+        
+        logger.info(f"Voice note sent from doctor {user.id} to patient {patient_telegram_id}")
+        
+    except Exception as e:
+        logger.error(f"Error sending voice note: {e}")
+        await update.message.reply_text(
+            f"❌ Error sending voice note: {str(e)}\n\n"
+            f"Please try again."
+        )
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+async def process_request_analysis(query, context):
+    """Process analysis for X-ray request (image already uploaded)"""
+    try:
+        # Get image path from context
+        image_path = context.user_data.get('xray_image_file_id')  # This is actually the file path now
+        
+        if not image_path or not os.path.exists(image_path):
+            await query.edit_message_text("❌ Image file not found for this request")
+            return
+        
+        await query.edit_message_text(
+            "⏳ Loading image and analyzing...\n"
+            "Please wait (RTX 3070 inference)...",
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Analyzing image from path: {image_path}")
+        
+        # Get analysis mode and scan type
+        mode = context.user_data.get('mode', 'mode_detailed')
+        scan_type = context.user_data.get('scan_type', 'X-ray')
+        
+        # Analyze based on mode
+        result = ""
+        if scan_type == "X-ray" and "14diseases" in mode:
+            result = analyze_xray_14diseases(image_path)
+        elif "fast" in mode:
+            result = vlm_fast(image_path)
+        elif "detailed" in mode:
+            result = vlm_detailed(image_path)
+        else:
+            result = vlm_detailed(image_path)
+        
+        # Store analysis result
+        context.user_data['analysis_result'] = result
+        context.user_data['image_path'] = image_path
+        context.user_data['scan_type_analyzed'] = scan_type
+        context.user_data['mode_used'] = mode
+        
+        # Extract Hindi text if present
+        hindi_text = ""
+        if "🇮🇳 **HINDI (Patient):**" in result:
+            parts = result.split("🇮🇳 **HINDI (Patient):**")
+            if len(parts) > 1:
+                hindi_part = parts[1].split("---")[0].strip()
+                hindi_text = hindi_part.replace("...", "")
+                context.user_data['hindi_report'] = hindi_text
+        
+        if not hindi_text:
+            hindi_text = """मरीज की जांच में निम्नलिखित पाया गया:
+
+कृपया डॉक्टर द्वारा बताई गई दवाइयां समय पर लें।"""
+            context.user_data['hindi_report'] = hindi_text
+        
+        # Get patient details
+        patient_name = context.user_data.get('patient_name', 'Patient')
+        patient_age = context.user_data.get('patient_age', 'N/A')
+        patient_village = context.user_data.get('patient_village', 'N/A')
+        
+        # Show result with action buttons
+        keyboard = [
+            [InlineKeyboardButton("📝 Edit Report", callback_data="edit_report")],
+            [InlineKeyboardButton("✅ Generate PDF", callback_data="generate_pdf")],
+            [InlineKeyboardButton("🔄 Re-analyze", callback_data="requests")],
+            [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
+        ]
+        
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=f"✅ **ANALYSIS COMPLETE**\n\n"
+                 f"👤 {patient_name} ({patient_age}y) - {patient_village}\n\n"
+                 f"{result[:800]}...\n\n"
+                 f"Choose next action:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Analysis complete for request, awaiting action")
+        
+    except Exception as e:
+        logger.error(f"Error in process_request_analysis: {e}")
+        await query.edit_message_text(
+            f"❌ Error analyzing image: {str(e)}\n\n"
+            f"Make sure Ollama is running:\n"
+            f"`ollama serve`",
+            parse_mode='Markdown'
+        )
+
 # ============================================
 # MENU FUNCTIONS
 # ============================================
@@ -685,8 +924,10 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_main_menu(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     """Show main doctor menu"""
     keyboard = [
-        [InlineKeyboardButton("📋 My Queue", callback_data="queue")],
+        [InlineKeyboardButton("📥 Requests", callback_data="requests"), 
+         InlineKeyboardButton("📋 My Queue", callback_data="queue")],
         [InlineKeyboardButton("🩻 Analyze Image", callback_data="analyze")],
+        [InlineKeyboardButton("📊 My Dashboard", callback_data="my_dashboard")],
         [InlineKeyboardButton("📋 Old Reports", callback_data="old_reports")],
         [InlineKeyboardButton("🔐 Regen Code", callback_data="regen_code_btn")],
         [InlineKeyboardButton("🚪 Logout", callback_data="logout")]
@@ -751,6 +992,222 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "✅ No pending X-rays in your queue!\n\nAll cases reviewed.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
+        
+        elif query.data == "requests":
+            # Show NEW pending X-ray requests with images and analyze button
+            requests = supabase.table("xray_requests").select(
+                "id, patient_name, age, village, symptoms, image_url, status, created_at"
+            ).eq("doctor_phone", phone).eq("status", "pending").order("created_at", desc=True).limit(10).execute()
+            
+            if requests.data and len(requests.data) > 0:
+                await query.edit_message_text(
+                    f"📥 **NEW REQUESTS**\n\nYou have {len(requests.data)} pending X-ray request(s).\n\nShowing details...",
+                    parse_mode='Markdown'
+                )
+                
+                # Send each request as separate message with image and analyze button
+                for r in requests.data:
+                    symptoms_short = r['symptoms'][:100] + "..." if r['symptoms'] and len(r['symptoms']) > 100 else (r['symptoms'] or 'No symptoms')
+                    
+                    caption = (
+                        f"🆕 **Request #{r['id']}**\n\n"
+                        f"👤 {r['patient_name']} ({r['age']}y)\n"
+                        f"📍 {r.get('village', 'N/A')}\n"
+                        f"🩺 {symptoms_short}\n"
+                        f"📅 {r.get('created_at', 'N/A')[:10]}"
+                    )
+                    
+                    # Create analyze button with request ID
+                    keyboard = [[InlineKeyboardButton("🩻 Analyze This X-Ray", callback_data=f"analyze_request_{r['id']}")]]
+                    
+                    # Send image from local file path
+                    image_path = r.get('image_url')
+                    if image_path and os.path.exists(image_path):
+                        try:
+                            with open(image_path, 'rb') as photo_file:
+                                await context.bot.send_photo(
+                                    chat_id=query.message.chat_id,
+                                    photo=photo_file,
+                                    caption=caption,
+                                    reply_markup=InlineKeyboardMarkup(keyboard),
+                                    parse_mode='Markdown'
+                                )
+                        except Exception as e:
+                            logger.error(f"Error sending image: {e}")
+                            # Fallback without image
+                            await context.bot.send_message(
+                                chat_id=query.message.chat_id,
+                                text=caption + "\n\n⚠️ Image not available",
+                                reply_markup=InlineKeyboardMarkup(keyboard),
+                                parse_mode='Markdown'
+                            )
+                    else:
+                        # No image file found
+                        await context.bot.send_message(
+                            chat_id=query.message.chat_id,
+                            text=caption + "\n\n📤 Image file not found",
+                            reply_markup=InlineKeyboardMarkup(keyboard),
+                            parse_mode='Markdown'
+                        )
+                
+                # Send back to menu button
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="👆 Click 'Analyze' button on any request to start",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
+                await query.edit_message_text(
+                    "✅ No new requests!\n\nAll caught up.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        
+        elif query.data == "my_dashboard":
+            # Show doctor's personal statistics
+            try:
+                # Get doctor's stats
+                total_pending = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "pending").execute()
+                total_reviewed = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "reviewed").execute()
+                total_sent = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "sent").execute()
+                
+                pending_count = total_pending.count if total_pending else 0
+                reviewed_count = total_reviewed.count if total_reviewed else 0
+                sent_count = total_sent.count if total_sent else 0
+                total_cases = pending_count + reviewed_count + sent_count
+                
+                text = f"📊 **MY DASHBOARD**\n\n"
+                text += f"👨‍⚕️ Dr. {doctor.get('name', 'Unknown')}\n"
+                text += f"📱 {phone}\n"
+                text += f"🏥 {doctor.get('phc', 'N/A')}\n"
+                text += f"🩺 MCI: {doctor.get('mci_reg', 'N/A')}\n\n"
+                text += f"📈 **STATISTICS**\n"
+                text += f"🔴 Pending: {pending_count}\n"
+                text += f"✅ Reviewed: {reviewed_count}\n"
+                text += f"📤 Sent: {sent_count}\n"
+                text += f"📊 Total Cases: {total_cases}\n"
+                text += f"⭐ Rating: {doctor.get('rating', 0):.1f}/5.0\n\n"
+                text += f"💡 Keep up the great work!"
+                
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logger.error(f"Error loading dashboard: {e}")
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
+                await query.edit_message_text(
+                    "❌ Error loading dashboard. Please try again.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        
+        elif query.data.startswith("analyze_request_"):
+            # Analyze specific X-ray request - load image and patient details
+            request_id = int(query.data.replace("analyze_request_", ""))
+            
+            try:
+                # Get request details
+                request = supabase.table("xray_requests").select("*").eq("id", request_id).execute()
+                
+                if request.data and len(request.data) > 0:
+                    req = request.data[0]
+                    
+                    # Store request details in context
+                    context.user_data['current_request_id'] = request_id
+                    context.user_data['current_request'] = req
+                    context.user_data['patient_name'] = req.get('patient_name')
+                    context.user_data['patient_age'] = req.get('age')
+                    context.user_data['patient_village'] = req.get('village')
+                    context.user_data['patient_symptoms'] = req.get('symptoms')
+                    context.user_data['xray_image_file_id'] = req.get('image_url')  # This is the file PATH
+                    
+                    # Show scan type selection (X-ray is default, but allow others)
+                    keyboard = [
+                        [InlineKeyboardButton("🫁 X-ray", callback_data="analyze_xray")],
+                        [InlineKeyboardButton("🧠 CT Scan", callback_data="analyze_ct"), 
+                         InlineKeyboardButton("🩻 MRI", callback_data="analyze_mri")],
+                        [InlineKeyboardButton("🩹 Skin", callback_data="analyze_skin")],
+                        [InlineKeyboardButton("🔙 Back", callback_data="requests")]
+                    ]
+                    
+                    # Send new message instead of editing (because original is a photo)
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"🩻 **ANALYZING REQUEST #{request_id}**\n\n"
+                             f"👤 {req.get('patient_name')} ({req.get('age')}y)\n"
+                             f"📍 {req.get('village')}\n"
+                             f"🩺 {req.get('symptoms')}\n\n"
+                             f"🏥 **SELECT SCAN TYPE**\n\nWhat type of scan is this?",
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+                    await query.answer()
+                else:
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text="❌ Request not found"
+                    )
+                    await query.answer()
+            except Exception as e:
+                logger.error(f"Error loading request: {e}")
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"❌ Error: {str(e)}"
+                )
+                await query.answer()
+        
+        elif query.data.startswith("analyze_"):
+            # Handle scan type selection from request
+            scan_type_map = {
+                "analyze_xray": "X-ray",
+                "analyze_ct": "CT",
+                "analyze_mri": "MRI",
+                "analyze_skin": "Skin"
+            }
+            
+            if query.data in scan_type_map:
+                context.user_data["scan_type"] = scan_type_map[query.data]
+                
+                # For X-ray, show mode selection
+                if query.data == "analyze_xray":
+                    keyboard = [
+                        [InlineKeyboardButton("⚡ FAST (llava-llama3:8b)", callback_data="mode_fast_request")],
+                        [InlineKeyboardButton("🔍 DETAILED (llava:13b)", callback_data="mode_detailed_request")],
+                        [InlineKeyboardButton("🎯 14-DISEASES (YOUR MODEL)", callback_data="mode_14diseases_request")],
+                        [InlineKeyboardButton("🔙 Back", callback_data="requests")]
+                    ]
+                    await query.edit_message_text(
+                        "⚙️ **X-RAY MODE** (RTX 3070):\n\nSelect analysis mode:",
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+                else:
+                    # Other scan types - use detailed mode
+                    context.user_data["mode"] = "mode_detailed_request"
+                    await process_request_analysis(query, context)
+            else:
+                # Original analyze button (manual upload)
+                keyboard = [
+                    [InlineKeyboardButton("🫁 X-ray", callback_data="xray")],
+                    [InlineKeyboardButton("🧠 CT Scan", callback_data="ct"), 
+                     InlineKeyboardButton("🩻 MRI", callback_data="mri")],
+                    [InlineKeyboardButton("🩹 Skin", callback_data="skin")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="back_menu")]
+                ]
+                await query.edit_message_text(
+                    "🏥 **SELECT SCAN TYPE**\n\nWhat type of scan do you want to analyze?",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+        
+        elif query.data.startswith("mode_") and query.data.endswith("_request"):
+            # Mode selected for request analysis
+            mode = query.data.replace("_request", "")
+            context.user_data["mode"] = mode
+            await process_request_analysis(query, context)
         
         elif query.data == "analyze":
             # Show scan type selection
@@ -872,12 +1329,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Get doctor info
                 doctor = doctors.data[0] if doctors.data else {}
                 
+                # Get patient details from context (from current request)
+                patient_name = context.user_data.get('patient_name', 'Patient')
+                patient_age = context.user_data.get('patient_age', 'N/A')
+                patient_village = context.user_data.get('patient_village', 'N/A')
+                patient_symptoms = context.user_data.get('patient_symptoms', 'N/A')
+                
                 # Prepare report data
                 report_data = {
-                    'patient_name': 'Test Patient',  # TODO: Get from queue
-                    'age': 45,
-                    'village': 'Test Village',
-                    'symptoms': 'Test symptoms',
+                    'patient_name': patient_name,
+                    'age': patient_age,
+                    'village': patient_village,
+                    'symptoms': patient_symptoms,
                     'diseases_detected': ['AI Analysis Results'],
                     'ai_report': context.user_data.get('analysis_result', 'No analysis available'),
                     'doctor_notes': context.user_data.get('doctor_notes', 'No additional notes'),
@@ -891,38 +1354,56 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Generate PDF
                 os.makedirs('reports', exist_ok=True)
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                pdf_filename = f"report_{timestamp}.pdf"
+                pdf_filename = f"report_{timestamp}_{patient_name.replace(' ', '_')}.pdf"
                 pdf_path = os.path.join('reports', pdf_filename)
                 
                 generate_pdf(report_data, pdf_path)
                 
                 logger.info(f"PDF generated: {pdf_path}")
                 
-                # Send PDF to doctor
-                with open(pdf_path, 'rb') as pdf_file:
-                    await context.bot.send_document(
-                        chat_id=query.message.chat_id,
-                        document=pdf_file,
-                        filename=pdf_filename,
-                        caption="✅ **PDF REPORT GENERATED**\n\n"
-                                "📄 Report ready for patient\n"
-                                "💾 Saved to dashboard\n\n"
-                                "TODO: Send to patient automatically",
-                        parse_mode='Markdown'
-                    )
+                # Update request status to 'reviewed' and save report path
+                request_id = context.user_data.get('current_request_id')
+                if request_id:
+                    try:
+                        supabase.table("xray_requests").update({
+                            "status": "reviewed",
+                            "reviewed_at": datetime.now().isoformat(),
+                            "report_pdf_url": pdf_path,
+                            "doctor_notes": context.user_data.get('doctor_notes', ''),
+                            "ai_report": context.user_data.get('analysis_result', '')
+                        }).eq("id", request_id).execute()
+                        
+                        logger.info(f"Request {request_id} marked as reviewed, report saved")
+                    except Exception as e:
+                        logger.error(f"Error updating request: {e}")
                 
-                # Clean up temp image
-                image_path = context.user_data.get('image_path')
-                if image_path and os.path.exists(image_path):
-                    os.remove(image_path)
-                    logger.info(f"Cleaned up temp image: {image_path}")
+                # Show success message with Contact Patient button
+                keyboard = [
+                    [InlineKeyboardButton("📞 Contact Patient", callback_data=f"contact_patient_{request_id}")],
+                    [InlineKeyboardButton("📥 Download Report", callback_data=f"download_report_{request_id}")],
+                    [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
+                ]
                 
-                # Clear analysis context
-                context.user_data.pop('analysis_result', None)
-                context.user_data.pop('image_path', None)
-                context.user_data.pop('doctor_notes', None)
-                context.user_data.pop('scan_type', None)
-                context.user_data.pop('mode', None)
+                await query.edit_message_text(
+                    f"✅ **REPORT GENERATED SUCCESSFULLY**\n\n"
+                    f"👤 Patient: {patient_name}\n"
+                    f"📄 Report saved to system\n"
+                    f"💾 File: {pdf_filename}\n\n"
+                    f"📋 **Status**: Request marked as reviewed\n\n"
+                    f"🔒 **Privacy**: Report NOT sent to patient (medical compliance)\n\n"
+                    f"👉 Click 'Contact Patient' to communicate with patient",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                
+                # Store report path for download
+                context.user_data['last_report_path'] = pdf_path
+                
+                # DON'T clear context yet - needed for contact patient
+                # Keep: current_request_id, patient_name, patient_age, patient_village, patient_telegram_id
+                context.user_data.pop('patient_age', None)
+                context.user_data.pop('patient_village', None)
+                context.user_data.pop('patient_symptoms', None)
                 
                 # Show main menu
                 await asyncio.sleep(1)
@@ -935,6 +1416,113 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"Please try again or contact admin.",
                     parse_mode='Markdown'
                 )
+        
+        elif query.data.startswith("contact_patient_"):
+            # Contact Patient - Show options
+            request_id = int(query.data.replace("contact_patient_", ""))
+            
+            # Get patient info
+            try:
+                request = supabase.table("xray_requests").select("*").eq("id", request_id).execute()
+                if request.data and len(request.data) > 0:
+                    req = request.data[0]
+                    patient_name = req.get('patient_name')
+                    patient_telegram_id = req.get('patient_telegram_id')
+                    
+                    # Store in context
+                    context.user_data['contact_patient_id'] = patient_telegram_id
+                    context.user_data['contact_patient_name'] = patient_name
+                    context.user_data['contact_request_id'] = request_id
+                    
+                    keyboard = [
+                        [InlineKeyboardButton("🎤 Send Voice Note", callback_data="send_voice")],
+                        [InlineKeyboardButton("💬 Send Text Message", callback_data="send_text")],
+                        [InlineKeyboardButton("🔙 Back", callback_data="back_menu")]
+                    ]
+                    
+                    await query.edit_message_text(
+                        f"📞 **CONTACT PATIENT**\n\n"
+                        f"👤 Patient: {patient_name}\n"
+                        f"📋 Request ID: #{request_id}\n\n"
+                        f"Choose communication method:",
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+                else:
+                    await query.edit_message_text("❌ Request not found")
+            except Exception as e:
+                logger.error(f"Error loading patient info: {e}")
+                await query.edit_message_text(f"❌ Error: {str(e)}")
+        
+        elif query.data == "send_voice":
+            # Send Voice Note
+            patient_name = context.user_data.get('contact_patient_name', 'Patient')
+            
+            context.user_data['waiting_for_voice'] = True
+            
+            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="back_menu")]]
+            
+            await query.edit_message_text(
+                f"🎤 **SEND VOICE NOTE**\n\n"
+                f"👤 To: {patient_name}\n\n"
+                f"📝 Please record and send your voice message now.\n\n"
+                f"The voice note will be forwarded to the patient.",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == "send_text":
+            # Send Text Message
+            patient_name = context.user_data.get('contact_patient_name', 'Patient')
+            
+            context.user_data['waiting_for_text'] = True
+            
+            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="back_menu")]]
+            
+            await query.edit_message_text(
+                f"💬 **SEND TEXT MESSAGE**\n\n"
+                f"👤 To: {patient_name}\n\n"
+                f"📝 Type your message below.\n\n"
+                f"✨ Your message will be automatically translated to:\n"
+                f"• English\n"
+                f"• Hindi (हिंदी)\n\n"
+                f"Both versions will be sent to the patient.",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
+            )
+        
+        elif query.data.startswith("download_report_"):
+            # Download Report
+            request_id = int(query.data.replace("download_report_", ""))
+            
+            try:
+                # Get report path from database
+                request = supabase.table("xray_requests").select("report_pdf_url, patient_name").eq("id", request_id).execute()
+                
+                if request.data and len(request.data) > 0:
+                    report_path = request.data[0].get('report_pdf_url')
+                    patient_name = request.data[0].get('patient_name')
+                    
+                    if report_path and os.path.exists(report_path):
+                        # Send PDF to doctor
+                        with open(report_path, 'rb') as pdf_file:
+                            await context.bot.send_document(
+                                chat_id=query.message.chat_id,
+                                document=pdf_file,
+                                filename=os.path.basename(report_path),
+                                caption=f"📄 **X-RAY REPORT**\n\n"
+                                        f"👤 Patient: {patient_name}\n"
+                                        f"📋 Request ID: #{request_id}",
+                                parse_mode='Markdown'
+                            )
+                        await query.answer("✅ Report downloaded")
+                    else:
+                        await query.answer("❌ Report file not found", show_alert=True)
+                else:
+                    await query.answer("❌ Request not found", show_alert=True)
+            except Exception as e:
+                logger.error(f"Error downloading report: {e}")
+                await query.answer(f"❌ Error: {str(e)}", show_alert=True)
         
         elif query.data == "logout":
             # Logout - clear session
@@ -978,6 +1566,7 @@ def main():
     app.add_handler(CommandHandler("status", status))
     app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
+    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     

@@ -811,17 +811,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 from datetime import datetime as dt
                 current_time = dt.now().isoformat()
                 
-                # Insert X-ray request (matching schema)
+                # Insert X-ray request with image PATH (not file_id)
                 request_data = {
                     'patient_name': form.get('name'),
                     'age': form.get('age'),
                     'village': form.get('village'),
                     'symptoms': form.get('symptoms'),
                     'doctor_phone': doctor_phone,
+                    'image_url': form.get('image_path', ''),  # Store local file path
                     'status': 'pending',
-                    'consent_time': current_time
+                    'consent_time': current_time,
+                    'patient_telegram_id': update.effective_user.id  # Store patient's telegram ID
                 }
                 response = supabase.table('xray_requests').insert(request_data).execute()
+                request_id = response.data[0]['id'] if response.data else None
                 
                 # Get doctor's telegram_id to notify
                 doctor_response = supabase.table('doctors').select('telegram_id, name').eq('phone', doctor_phone).execute()
@@ -830,15 +833,38 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     doctor = doctor_response.data[0]
                     doctor_telegram_id = doctor.get('telegram_id')
                     
-                    # Notify doctor
+                    # Notify doctor with image from local file
                     if doctor_telegram_id:
                         try:
-                            await context.bot.send_message(
-                                chat_id=doctor_telegram_id,
-                                text=f"🩻 NEW X-RAY REQUEST\n\n👤 {form['name']} ({form['age']}y)\n📍 {form['village']}\n🩺 {form['symptoms']}\n\n📋 Check /status for details"
-                            )
+                            # Send image from local file path
+                            image_path = form.get('image_path')
+                            if image_path and os.path.exists(image_path):
+                                with open(image_path, 'rb') as photo_file:
+                                    await context.bot.send_photo(
+                                        chat_id=doctor_telegram_id,
+                                        photo=photo_file,
+                                        caption=f"🩻 **NEW X-RAY REQUEST** (ID: {request_id})\n\n"
+                                                f"👤 {form['name']} ({form['age']}y)\n"
+                                                f"📍 {form['village']}\n"
+                                                f"🩺 {form['symptoms']}\n\n"
+                                                f"📥 Click 'Requests' button in @MediMindDoctorBot to analyze",
+                                        parse_mode='Markdown'
+                                    )
+                            else:
+                                # Fallback if no image
+                                await context.bot.send_message(
+                                    chat_id=doctor_telegram_id,
+                                    text=f"🩻 NEW X-RAY REQUEST (ID: {request_id})\n\n"
+                                         f"👤 {form['name']} ({form['age']}y)\n"
+                                         f"📍 {form['village']}\n"
+                                         f"🩺 {form['symptoms']}\n\n"
+                                         f"📋 Check 'Requests' button in @MediMindDoctorBot"
+                                )
                         except Exception as e:
                             logger.error(f"Failed to notify doctor: {e}")
+                
+                # Don't clean up image - doctor needs it!
+                # image_path will be used by doctor bot
                 
                 await query.edit_message_text(TEXTS[lang]['xray_sent'], reply_markup=get_main_menu_keyboard(lang))
                 context.user_data.pop('patient_form', None)
@@ -1456,34 +1482,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text("🩺 Describe symptoms:\n\nExample: Cough 5 days, chest pain, fever")
     
     elif state == 'waiting_xray_symptoms':
-        # Step 4: Get symptoms and show doctor list
+        # Step 4: Get symptoms, then ask for image
         context.user_data['patient_form']['symptoms'] = text
-        form = context.user_data['patient_form']
-        lang = context.user_data.get('language', 'en')
+        context.user_data['state'] = 'waiting_xray_image'
         
-        # Get available doctors from Supabase
-        if supabase and supabase_connected:
-            doctors_response = supabase.table('doctors').select('phone, name, phc, rating').eq('active', True).order('rating', desc=True).limit(5).execute()
-            
-            if doctors_response.data and len(doctors_response.data) > 0:
-                keyboard = []
-                for doc in doctors_response.data:
-                    rating_stars = '⭐' * int(doc.get('rating', 0))
-                    btn_text = f"Dr. {doc['name']} {rating_stars} ({doc.get('phc', 'PHC')})"
-                    keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"xray_doctor_{doc['phone']}")])
-                keyboard.append([InlineKeyboardButton("🔙 Cancel", callback_data="back_menu")])
-                
-                await update.message.reply_text(
-                    f"✅ Patient: {form['name']} ({form['age']}y)\n📍 {form['village']}\n🩺 {form['symptoms']}\n\n👨‍⚕️ Choose PHC doctor:",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-                context.user_data['state'] = None
-            else:
-                await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
-                context.user_data['state'] = None
-        else:
-            await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
-            context.user_data['state'] = None
+        await update.message.reply_text(
+            "📸 **Upload X-Ray Image**\n\n"
+            "Please send the X-ray image now.\n\n"
+            "📱 You can take a photo or send from gallery.",
+            parse_mode='Markdown'
+        )
     
     elif state == 'waiting_xray_form':
         # Parse X-ray form: Name|Age|Village|Symptoms
@@ -1719,6 +1727,77 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     else:
         await update.message.reply_text(TEXTS[lang]['unknown'], reply_markup=get_main_menu_keyboard(lang))
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photo uploads for X-ray requests"""
+    state = context.user_data.get('state')
+    lang = context.user_data.get('language', 'en')
+    
+    if state == 'waiting_xray_image':
+        # Step 5: Get X-ray image, then show doctor list
+        try:
+            # Download photo
+            photo = update.message.photo[-1]  # Highest quality
+            file = await context.bot.get_file(photo.file_id)
+            
+            # Save to shared location that both bots can access
+            import os
+            os.makedirs('xray_images', exist_ok=True)
+            image_filename = f"xray_{update.effective_user.id}_{photo.file_id[-10:]}.jpg"
+            image_path = os.path.join('xray_images', image_filename)
+            await file.download_to_drive(image_path)
+            
+            # Store BOTH file_id (for patient bot) and local path (for doctor bot)
+            context.user_data['patient_form']['image_path'] = image_path
+            context.user_data['patient_form']['image_file_id'] = photo.file_id
+            
+            form = context.user_data['patient_form']
+            
+            await update.message.reply_text("✅ X-ray image received!\n\n⏳ Processing...")
+            
+            # Get available doctors from Supabase
+            if supabase and supabase_connected:
+                doctors_response = supabase.table('doctors').select('phone, name, phc, rating').eq('active', True).order('rating', desc=True).limit(5).execute()
+                
+                if doctors_response.data and len(doctors_response.data) > 0:
+                    keyboard = []
+                    for doc in doctors_response.data:
+                        rating_stars = '⭐' * int(doc.get('rating', 0))
+                        btn_text = f"Dr. {doc['name']} {rating_stars} ({doc.get('phc', 'PHC')})"
+                        keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"xray_doctor_{doc['phone']}")])
+                    keyboard.append([InlineKeyboardButton("🔙 Cancel", callback_data="back_menu")])
+                    
+                    await update.message.reply_text(
+                        f"✅ **Patient Details:**\n\n"
+                        f"👤 {form['name']} ({form['age']}y)\n"
+                        f"📍 {form['village']}\n"
+                        f"🩺 {form['symptoms']}\n"
+                        f"📸 X-ray image attached\n\n"
+                        f"👨‍⚕️ Choose PHC doctor:",
+                        reply_markup=InlineKeyboardMarkup(keyboard),
+                        parse_mode='Markdown'
+                    )
+                    context.user_data['state'] = None
+                else:
+                    await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+                    context.user_data['state'] = None
+            else:
+                await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+                context.user_data['state'] = None
+                
+        except Exception as e:
+            logger.error(f"Error handling X-ray image: {e}")
+            await update.message.reply_text(
+                "❌ Error processing image. Please try again.",
+                reply_markup=get_main_menu_keyboard(lang)
+            )
+            context.user_data['state'] = None
+    else:
+        # Photo sent but not in X-ray flow
+        await update.message.reply_text(
+            "❓ Please use the menu to start X-ray check first.",
+            reply_markup=get_main_menu_keyboard(lang)
+        )
+
 def main() -> None:
     token = os.getenv('BOT_TOKEN')
     if not token:
@@ -1729,6 +1808,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
     application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     

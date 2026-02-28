@@ -1,69 +1,49 @@
-# 🏥 MediMind Rural - Healthcare Management System
+# MediMind Rural Healthcare System
 
-> A comprehensive healthcare management system for rural Gujarat combining Telegram bot and web dashboard
+A comprehensive Telegram-based healthcare management system for rural areas, featuring AI-powered X-ray analysis, bilingual report generation, and real-time doctor-patient communication.
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
-[![Telegram](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://core.telegram.org/bots)
-[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green.svg)](https://supabase.com/)
-[![License](https://img.shields.io/badge/License-Educational-yellow.svg)]()
+## 🌟 Features
 
----
+### Patient Bot (@MediMindRuralBot)
+- 🚨 Emergency reporting with location
+- 📅 Appointment booking
+- 💊 Medicine reminders
+- 👶 Maternal health tracking
+- 🧠 AI health chat
+- 🩻 X-ray request submission
+- 📄 Receive medical reports
 
-## 📋 Overview
+### Doctor Bot (@MediMindDoctorBot)
+- 🔐 Secure login with access codes
+- 📥 View pending X-ray requests
+- 🤖 AI-powered X-ray analysis (Ollama)
+- 📄 Generate bilingual PDF reports (English + Hindi)
+- 📞 Contact patients (voice/text with auto-translation)
+- 📊 Personal dashboard
+- 🔔 Real-time notifications
 
-MediMind Rural is a dual-interface healthcare management system designed specifically for rural areas in Gujarat, India. It provides:
-
-- **Telegram Bot** for patients and health workers (mobile-first)
-- **Web Dashboard** for administrators (desktop management)
-- **Multi-language Support** (English, Hindi, Gujarati)
-- **Real-time Notifications** and emergency alerts
-- **AI-powered Assistant** using Sarvam-1 model
-
----
-
-## ✨ Key Features
-
-### 🤖 Telegram Bot (8 Features)
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| 🏥 Hospital Finder | Find nearest hospitals within 10km | ✅ Working |
-| 🚑 Emergency SOS | One-tap emergency alert with location | ✅ Working |
-| 💊 Medicine Reminders | Daily medication notifications | ✅ Working |
-| 📅 Appointment Booking | Schedule hospital visits | ✅ Working |
-| 👶 Maternal Health | Pregnancy tracking & schemes | ✅ Working |
-| 👩‍⚕️ Health Worker Mode | Registration & patient management | ✅ Working |
-| 🌿 Government Schemes | Dynamic scheme information | ✅ Working |
-| 📢 Raise Problem | Report issues to admin | ✅ Working |
-
-### 🖥️ Admin Dashboard (9 Pages)
-
-| Page | Description | Status |
-|------|-------------|--------|
-| 🏠 Home | Overview & live emergency map | ✅ Working |
-| 👥 Health Workers | Approve/manage registrations | ✅ Working |
-| 🚨 Emergencies | Monitor & resolve emergencies | ✅ Working |
-| 📅 Appointments | View & manage appointments | ✅ Working |
-| 💊 Reminders | Track medicine reminders | ✅ Working |
-| 👶 Maternal Health | Pregnancy tracking records | ✅ Working |
-| 🤖 AI Chat | Sarvam-1 AI assistant | ✅ Working |
-| ⚙️ CRUD Operations | Full database management | ✅ Working |
-| 🌿 Govt Schemes | Add/edit schemes (synced with bot) | ✅ Working |
-| 🆘 Issues | View & resolve user problems | ✅ Working |
-
----
+### Admin Dashboard (Streamlit)
+- 👥 Health worker management
+- 🚨 Emergency monitoring
+- 📅 Appointment tracking
+- 👨‍⚕️ Doctor management
+- 🩻 X-ray request monitoring
+- 📄 Reports management
+- 📊 Statistics & analytics
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.10 or higher
-- Telegram account
-- Supabase account (free tier works)
-- Ollama (for AI features)
+```bash
+# Python 3.8+
+python --version
 
-### Installation (5 Minutes)
+# Ollama (for AI)
+ollama --version
+```
+
+### Installation
 
 ```bash
 # 1. Clone repository
@@ -72,528 +52,228 @@ cd CVMU-chatbot
 
 # 2. Install dependencies
 pip install -r requirements.txt
-cd dashboard && pip install -r requirements.txt && cd ..
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env with your credentials
+# 3. Install Ollama models
+ollama pull llava-llama3:8b
+ollama pull llava:13b
+ollama pull mashriram/sarvam-1
 
-# 4. Setup database
-# Go to Supabase → SQL Editor
-# Run: create_table.sql
+# 4. Setup environment variables
+# Create .env, .env.doctor, and dashboard/.env files
+# (See PROJECT_COMPLETE_DOCUMENTATION.md for details)
 
-# 5. Install Ollama & Sarvam-1
-# Download from: https://ollama.com
-ollama run mashriram/sarvam-1
+# 5. Setup database
+# Run SQL scripts in database/ folder on Supabase
 
-# 6. Start bot
+# 6. Create folders
+mkdir xray_images reports fonts
+
+# 7. Download Hindi font
+# Place NotoSansDevanagari-Regular.ttf in fonts/ folder
+```
+
+### Running the System
+
+```bash
+# Terminal 1: Start Ollama
+ollama serve
+
+# Terminal 2: Start Patient Bot
 python bot.py
 
-# 7. Start dashboard (new terminal)
-cd dashboard
-streamlit run app.py
+# Terminal 3: Start Doctor Bot
+python doctor_bot.py
+
+# Terminal 4: Start Admin Dashboard
+streamlit run dashboard/app.py
 ```
 
-**Done!** 🎉
-- Bot: Message your bot on Telegram
-- Dashboard: Open http://localhost:8501
+## 📚 Documentation
 
----
-
-## 📖 Documentation
-
-- **[Complete Documentation](DOCUMENTATION.md)** - Full system documentation
-- **[Quick Start Guide](start.md)** - Get started in 5 minutes
-- **[Database Schema](create_table.sql)** - All tables and policies
-
----
-
-## 🔧 Configuration
-
-### 1. Create `.env` File
-
-```env
-# Telegram Bot
-BOT_TOKEN=your_bot_token_from_botfather
-ADMIN_ID=your_telegram_user_id
-
-# Supabase Database
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_anon_key
-```
-
-### 2. Create `dashboard/.env` File
-
-```env
-# Supabase Database (same as above)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_supabase_anon_key
-```
-
-### 3. Get Your Credentials
-
-**Telegram Bot Token:**
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. Send `/newbot` and follow instructions
-3. Copy the token
-
-**Admin ID:**
-1. Message [@userinfobot](https://t.me/userinfobot)
-2. Copy your user ID
-
-**Supabase:**
-1. Create account at [supabase.com](https://supabase.com)
-2. Create new project
-3. Go to Settings → API
-4. Copy URL and anon key
-
----
-
-## 🗄️ Database Setup
-
-### Run SQL Schema
-
-1. Open [Supabase Dashboard](https://supabase.com/dashboard)
-2. Go to SQL Editor
-3. Copy contents of `create_table.sql`
-4. Paste and click "Run"
-5. Verify 7 tables created
-
-### Tables Created
-
-- `emergencies` - Emergency alerts
-- `health_workers` - Worker registrations
-- `appointments` - Hospital appointments
-- `reminders` - Medicine reminders
-- `maternal` - Pregnancy tracking
-- `govt_schemes` - Government schemes
-- `issues` - User-reported problems
-
-### Important: Fix Emergency Updates
-
-Run this SQL to enable resolve button:
-
-```sql
-CREATE POLICY "Allow public updates" ON emergencies
-  FOR UPDATE USING (true);
-```
-
----
-
-## 📱 Usage
-
-### For Patients
-
-1. **Start Bot:** Search for your bot on Telegram
-2. **Select Language:** Choose English/Hindi/Gujarati
-3. **Use Features:** Click any button from main menu
-4. **Get Help:** Use "📢 Raise Problem" for issues
-
-### For Health Workers
-
-1. **Register:** Click "👩‍⚕️ Health Worker Mode" → Register
-2. **Wait for Approval:** Admin will approve your registration
-3. **Access Features:** View patients and schedule
-
-### For Administrators
-
-1. **Open Dashboard:** http://localhost:8501
-2. **Monitor:** Check home page for overview
-3. **Manage:** Use sidebar to navigate pages
-4. **Respond:** Resolve emergencies and issues
-
----
+- **Complete Documentation:** [PROJECT_COMPLETE_DOCUMENTATION.md](PROJECT_COMPLETE_DOCUMENTATION.md)
+- **Quick Start Guide:** [start.md](start.md)
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐         ┌─────────────┐
-│  Telegram   │         │   Browser   │
-│   (Users)   │         │  (Admins)   │
-└──────┬──────┘         └──────┬──────┘
-       │                       │
-       ▼                       ▼
-┌─────────────┐         ┌─────────────┐
-│ Python Bot  │         │  Streamlit  │
-│  (bot.py)   │◄───────►│ Dashboard   │
-└──────┬──────┘         └──────┬──────┘
-       │                       │
-       └───────────┬───────────┘
-                   ▼
-          ┌────────────────┐
-          │    Supabase    │
-          │   PostgreSQL   │
-          └────────────────┘
-                   │
-                   ▼
-          ┌────────────────┐
-          │ External APIs  │
-          │ • Overpass     │
-          │ • Ollama       │
-          └────────────────┘
+Patient Bot (Telegram) ──┐
+                         ├──> Supabase Database
+Doctor Bot (Telegram) ───┤
+                         │
+Admin Dashboard (Web) ───┘
+         │
+         ├──> Ollama AI (Local)
+         ├──> File Storage (Local)
+         └──> Telegram API
 ```
 
----
+## 🔧 Technology Stack
 
-## 🛠️ Tech Stack
+- **Backend:** Python 3.8+
+- **Bots:** python-telegram-bot
+- **Dashboard:** Streamlit
+- **Database:** Supabase (PostgreSQL)
+- **AI:** Ollama (llava, sarvam-1)
+- **PDF:** ReportLab
+- **Translation:** Ollama sarvam-1 (Hindi)
 
-### Backend
-- **Python 3.10+** - Core language
-- **python-telegram-bot 21.0.1** - Telegram bot framework
-- **Supabase** - PostgreSQL database
-- **Ollama** - AI model hosting
-- **Sarvam-1** - Hindi/Gujarati AI model
-
-### Frontend
-- **Streamlit** - Web dashboard framework
-- **Folium** - Interactive maps
-- **Pandas** - Data manipulation
-
-### APIs
-- **Overpass API** - Hospital location data
-- **Telegram Bot API** - Bot communication
-- **Supabase REST API** - Database operations
-
----
-
-## 📊 Project Structure
+## 📁 Project Structure
 
 ```
 CVMU-chatbot/
-├── bot.py                    # Telegram bot (main)
-├── requirements.txt          # Bot dependencies
-├── .env                      # Bot configuration
-├── create_table.sql         # Database schema
-├── fix_emergency_update.sql # Emergency fix
-├── start.md                 # Quick start
-├── DOCUMENTATION.md         # Full docs
-├── README.md                # This file
-├── .gitignore              # Git ignore rules
-│
-└── dashboard/              # Admin dashboard
-    ├── app.py              # Home page
-    ├── requirements.txt    # Dashboard dependencies
-    ├── .env               # Dashboard config
-    ├── .env.example       # Example config
-    │
-    └── pages/             # Dashboard pages
-        ├── 1_👥_Health_Workers.py
-        ├── 2_🚨_Emergencies.py
-        ├── 3_📅_Appointments.py
-        ├── 4_💊_Reminders.py
-        ├── 5_👶_Maternal_Health.py
-        ├── 6_🤖_AI_Chat.py
-        ├── 7_⚙️_CRUD_Operations.py
-        ├── 8_🌿_Govt_Schemes.py
-        └── 9_🆘_Issues.py
+├── bot.py                      # Patient bot
+├── doctor_bot.py               # Doctor bot
+├── report_generator.py         # PDF generation
+├── dashboard/                  # Admin panel
+│   ├── app.py
+│   ├── pages/
+│   │   ├── 10_👨‍⚕️_Doctor_Dashboard.py
+│   │   ├── 11_👨‍⚕️_Manage_Doctors.py
+│   │   ├── 12_🩻_X-Ray_Requests.py
+│   │   └── 13_📄_Reports.py
+│   └── supabase_wrapper.py
+├── database/                   # SQL scripts
+├── xray_images/               # X-ray storage
+├── reports/                   # PDF storage
+└── fonts/                     # Font files
 ```
 
----
+## 🔑 Key Features
+
+### X-Ray Request System
+1. Patient submits X-ray through bot
+2. Doctor receives notification
+3. AI analyzes X-ray (3 modes: Fast, Detailed, 14-Diseases)
+4. Doctor reviews and adds notes
+5. Bilingual PDF report generated
+6. Doctor contacts patient with results
+
+### Contact Patient Feature
+- **Voice Notes:** Record and send voice messages
+- **Text Messages:** Auto-translate English to Hindi
+- **Privacy Compliant:** Reports not auto-sent to patients
+- **Doctor Control:** Full control over communication
+
+### Reports Management
+- **Admin View:** All reports from all doctors
+- **Doctor View:** Only their own reports
+- **Features:** Filter, search, download, export CSV
+- **Analytics:** Performance metrics, turnaround time
+
+## 🧪 Testing
+
+### Test Credentials
+
+**Doctor Login:**
+- Phone: `+919876543210`
+- Access Code: `TEST1234`
+
+### Test Flow
+
+1. **Patient Side:**
+   - Open @MediMindRuralBot
+   - Submit X-ray request
+   - Upload image
+
+2. **Doctor Side:**
+   - Open @MediMindDoctorBot
+   - View requests
+   - Analyze X-ray
+   - Generate report
+   - Contact patient
+
+3. **Admin Side:**
+   - Open http://localhost:8501
+   - Monitor requests
+   - View reports
+   - Check analytics
 
 ## 🐛 Troubleshooting
 
-### Bot Not Starting
+### Common Issues
 
+**Database Connection Failed**
 ```bash
-# Check Python version
-python --version  # Should be 3.10+
-
-# Reinstall dependencies
-pip install -r requirements.txt
-
-# Check .env file exists
-cat .env
+# Solution: Run from project root
+cd "D:\CVMU - chatbot"
+streamlit run dashboard/app.py
 ```
 
-### Dashboard Not Loading
-
+**Ollama Connection Error**
 ```bash
-# Check Streamlit installed
-streamlit --version
-
-# Try different port
-streamlit run app.py --server.port 8502
-
-# Check Supabase connection
-# Verify credentials in dashboard/.env
-```
-
-### Emergency Resolve Button Not Working
-
-```sql
--- Run this in Supabase SQL Editor
-CREATE POLICY "Allow public updates" ON emergencies
-  FOR UPDATE USING (true);
-```
-
-### AI Chat Not Working
-
-```bash
-# Start Ollama
+# Solution: Start Ollama
 ollama serve
-
-# Run Sarvam-1 model
-ollama run mashriram/sarvam-1
-
-# Check endpoint in dashboard/pages/6_🤖_AI_Chat.py
-# Should be: http://localhost:11434/api/generate
-# Model: mashriram/sarvam-1
 ```
 
----
+**Translation Not Working**
+```bash
+# Solution: Pull sarvam-1 model
+ollama pull mashriram/sarvam-1
+```
+
+See [PROJECT_COMPLETE_DOCUMENTATION.md](PROJECT_COMPLETE_DOCUMENTATION.md) for more troubleshooting.
+
+## 📊 Database Schema
+
+### Main Tables
+- `doctors` - Doctor profiles and credentials
+- `xray_requests` - X-ray submissions and reports
+- `doctor_patient_messages` - Communication audit trail (optional)
+
+See `database/` folder for complete schema.
 
 ## 🔒 Security
 
-### Best Practices
+- Environment variables for sensitive data
+- Secure access codes for doctors
+- Phone verification for registration
+- Audit trail for communications
+- Medical privacy compliance
 
-- ✅ Never commit `.env` files
-- ✅ Use environment variables for secrets
-- ✅ Enable Row Level Security (RLS) in Supabase
-- ✅ Regularly update dependencies
-- ✅ Monitor API usage
-- ✅ Use HTTPS in production
+## 🌐 Deployment
 
-### Production Checklist
-
-- [ ] Change default passwords
-- [ ] Enable 2FA on Supabase
-- [ ] Set up SSL/TLS
-- [ ] Configure firewall
-- [ ] Enable logging
-- [ ] Set up backups
-- [ ] Monitor error rates
-- [ ] Test disaster recovery
-
----
-
-## 📈 Performance
-
-### Optimization Tips
-
-1. **Database Indexing** - Already configured in `create_table.sql`
-2. **Caching** - Streamlit caching enabled
-3. **Connection Pooling** - Supabase handles automatically
-4. **Rate Limiting** - Telegram bot has built-in limits
-
-### Monitoring
-
-- **Bot Status:** Check terminal for logs
-- **Dashboard:** Streamlit shows errors in UI
-- **Database:** Monitor in Supabase dashboard
-- **API Usage:** Check Supabase API logs
-
----
-
-## 🚀 Deployment
-
-### Option 1: VPS (Recommended)
-
+### Local Development
 ```bash
-# Ubuntu 20.04+ server
-sudo apt update && sudo apt upgrade -y
-sudo apt install python3.10 python3-pip -y
-
-# Clone and setup
-git clone <repo-url>
-cd CVMU-chatbot
-pip3 install -r requirements.txt
-
-# Configure systemd services
-sudo nano /etc/systemd/system/medimind-bot.service
-sudo nano /etc/systemd/system/medimind-dashboard.service
-
-# Start services
-sudo systemctl start medimind-bot
-sudo systemctl start medimind-dashboard
-sudo systemctl enable medimind-bot
-sudo systemctl enable medimind-dashboard
+python bot.py
+python doctor_bot.py
+streamlit run dashboard/app.py
 ```
 
-### Option 2: Docker
+### Production Considerations
+- Use cloud storage for images/PDFs
+- Implement database backups
+- Set up monitoring and logging
+- Use process managers (PM2, systemd)
+- Configure reverse proxy (nginx)
 
-```bash
-# Build and run
-docker-compose up -d
+## 📝 License
 
-# Check logs
-docker-compose logs -f
-```
+[Your License Here]
 
-### Option 3: Streamlit Cloud (Dashboard Only)
+## 👥 Contributors
 
-1. Push to GitHub
-2. Go to [streamlit.io/cloud](https://streamlit.io/cloud)
-3. Connect repository
-4. Add secrets
-5. Deploy
+MediMind Team
 
----
+## 📧 Support
 
-## 🤝 Contributing
-
-We welcome contributions! Please:
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open Pull Request
-
-### Development Setup
-
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Install dev dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt  # If exists
-
-# Run tests
-pytest
-
-# Format code
-black .
-```
-
----
-
-## 📝 Changelog
-
-### Version 2.1 (Current)
-- ✅ Added Government Schemes sync (Dashboard ↔ Bot)
-- ✅ Fixed Emergency resolve button
-- ✅ Added Issues management page
-- ✅ Cleaned sidebar UI
-- ✅ Fixed AI Chat endpoint
-- ✅ Added "Raise Problem" feature
-
-### Version 2.0
-- ✅ Complete admin dashboard (9 pages)
-- ✅ AI Chat with Sarvam-1
-- ✅ Government Schemes CRUD
-- ✅ Multi-language support
-- ✅ Health worker registration
-
-### Version 1.0
-- ✅ Basic Telegram bot (8 features)
-- ✅ Supabase integration
-- ✅ Hospital finder
-- ✅ Emergency alerts
-- ✅ Medicine reminders
-- ✅ Appointment booking
-
----
-
-## 📄 License
-
-This project is for educational and healthcare purposes. 
-
-**Restrictions:**
-- Not for commercial use without permission
-- Must credit original authors
-- Cannot be used for harmful purposes
-
----
-
-## 👥 Team
-
-**Developed for:** Rural Gujarat Healthcare  
-**Purpose:** Educational & Social Impact  
-**Technology:** Python, Telegram, Streamlit, Supabase
-
----
-
-## 🙏 Acknowledgments
-
-- **Telegram Bot API** - Bot framework
-- **Streamlit** - Dashboard framework
-- **Supabase** - Database hosting
-- **Ollama** - AI model hosting
-- **Sarvam AI** - Hindi/Gujarati AI model
-- **Overpass API** - Hospital location data
-- **Gujarat Health Department** - Healthcare data
-
----
-
-## 📞 Support
-
-### Documentation
-- [Complete Documentation](DOCUMENTATION.md)
-- [Quick Start Guide](start.md)
-- [Database Schema](create_table.sql)
-
-### Common Issues
-- Check [Troubleshooting](#-troubleshooting) section
-- Review [DOCUMENTATION.md](DOCUMENTATION.md)
-- Check Supabase logs
-- Enable debug mode
-
-### Contact
-- **Issues:** Open GitHub issue
-- **Questions:** Check documentation first
-- **Bugs:** Report with logs and steps to reproduce
-
----
+For issues and questions, refer to:
+- [PROJECT_COMPLETE_DOCUMENTATION.md](PROJECT_COMPLETE_DOCUMENTATION.md)
+- [start.md](start.md)
 
 ## 🎯 Roadmap
 
-### Planned Features
-
-- [ ] SMS notifications
-- [ ] Email alerts
-- [ ] Mobile app (React Native)
-- [ ] Voice commands
-- [ ] Offline mode
-- [ ] Analytics dashboard
-- [ ] Export reports (PDF/Excel)
-- [ ] Multi-region support
-- [ ] Video consultations
-- [ ] Payment integration
+- [ ] Mobile app version
+- [ ] Cloud storage integration
+- [ ] Multi-language support (more languages)
+- [ ] Advanced analytics dashboard
+- [ ] Telemedicine video calls
+- [ ] Prescription management
+- [ ] Lab test integration
 
 ---
 
-## 📊 Statistics
+**Version:** 2.0  
+**Last Updated:** February 28, 2026  
+**Status:** Production Ready
 
-- **Lines of Code:** ~5,000+
-- **Features:** 17 (8 bot + 9 dashboard)
-- **Languages:** 3 (English, Hindi, Gujarati)
-- **Database Tables:** 7
-- **API Integrations:** 3
-- **Pages:** 10 (1 home + 9 management)
-
----
-
-## ⭐ Star History
-
-If this project helped you, please consider giving it a star! ⭐
-
----
-
-## 📸 Screenshots
-
-### Telegram Bot
-- Multi-language interface
-- 8 feature buttons
-- Real-time notifications
-- Location sharing
-
-### Admin Dashboard
-- Clean sidebar navigation
-- Live emergency map
-- Interactive charts
-- CRUD operations
-
----
-
-**Made with ❤️ for Rural Gujarat Healthcare**
-
-**Version:** 2.1  
-**Status:** Production Ready ✅  
-**Last Updated:** February 22, 2026
-
----
-
-[⬆ Back to Top](#-medimind-rural---healthcare-management-system)
+For detailed documentation, see [PROJECT_COMPLETE_DOCUMENTATION.md](PROJECT_COMPLETE_DOCUMENTATION.md)
