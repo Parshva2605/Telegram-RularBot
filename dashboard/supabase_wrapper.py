@@ -60,7 +60,7 @@ class SelectQuery:
         return self
     
     def execute(self):
-        params = {"select": self.columns}
+        params = {}
         if self._limit:
             params["limit"] = self._limit
         if self._order:
@@ -83,6 +83,25 @@ class SelectQuery:
         
         if response.status_code in [200, 206]:
             data = response.json()
+            
+            # WORKAROUND: If filtered query returns empty but we have filters,
+            # try getting all records and filter client-side (RLS policy issue)
+            if not data and self.filters:
+                # Try without filters
+                response_all = requests.get(self.url, headers=headers, params=params)
+                if response_all.status_code in [200, 206]:
+                    all_data = response_all.json()
+                    
+                    # Parse filters and apply client-side
+                    filtered_data = all_data
+                    for filter_str in self.filters:
+                        # Parse filter: "column=eq.value"
+                        if '=eq.' in filter_str:
+                            column, value = filter_str.split('=eq.')
+                            filtered_data = [d for d in filtered_data if str(d.get(column)) == value]
+                    
+                    data = filtered_data
+            
             count_header = response.headers.get('Content-Range', '')
             if count_header and '/' in count_header:
                 count_str = count_header.split('/')[-1]
