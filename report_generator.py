@@ -7,9 +7,59 @@ Generates MCI-compliant X-ray analysis reports
 from fpdf import FPDF
 from datetime import datetime
 import os
+import urllib.request
 
 class MediMindPDF(FPDF):
     """Custom PDF class with MediMind branding"""
+    
+    def __init__(self):
+        super().__init__()
+        # Add Unicode font for Hindi support
+        self.add_unicode_font()
+    
+    def add_unicode_font(self):
+        """Add Unicode font for Hindi text"""
+        try:
+            # Try to use DejaVu Sans (supports Hindi)
+            font_path = self.get_font_path()
+            if font_path:
+                self.add_font('DejaVu', '', font_path)
+                self.hindi_font_available = True
+            else:
+                self.hindi_font_available = False
+        except Exception as e:
+            print(f"Warning: Could not load Unicode font: {e}")
+            self.hindi_font_available = False
+    
+    def get_font_path(self):
+        """Get path to DejaVu Sans font"""
+        # Common font locations
+        possible_paths = [
+            'C:/Windows/Fonts/DejaVuSans.ttf',  # Windows
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  # Linux
+            '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',  # Mac
+            'fonts/DejaVuSans.ttf',  # Local folder
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+        
+        # Try to download if not found
+        try:
+            os.makedirs('fonts', exist_ok=True)
+            # Use a working download URL
+            font_url = 'https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.zip'
+            local_path = 'fonts/DejaVuSans.ttf'
+            
+            # For now, just return None if not found locally
+            # User can manually download the font
+            print("DejaVu Sans font not found. Hindi will show as placeholder.")
+            print("To enable Hindi: Download DejaVu Sans font to fonts/ folder")
+            return None
+        except Exception as e:
+            print(f"Could not setup font: {e}")
+            return None
     
     def header(self):
         """Add header to each page"""
@@ -146,14 +196,49 @@ Notes:
     
     pdf.section_content(doctor_info)
     
-    # Hindi Patient Report Section (if available)
+    # Bilingual Patient Summary Section (English + Hindi)
+    pdf.section_title('PATIENT SUMMARY (BILINGUAL)', '')
+    
+    # English summary
+    pdf.set_font('Arial', 'B', 10)
+    pdf.cell(0, 6, 'English:', 0, 1)
+    pdf.set_font('Arial', '', 10)
+    
+    # Create a simple English summary
+    diseases = report_data.get('diseases_detected', [])
+    if isinstance(diseases, list) and diseases:
+        diseases_text = ', '.join(str(d) for d in diseases[:3])  # Top 3
+    else:
+        diseases_text = str(diseases) if diseases else "No significant findings"
+    
+    english_summary = f"""Findings: {diseases_text}
+
+Recommendation: Please follow the treatment plan prescribed by the doctor. Take all medications as directed. Return for follow-up as scheduled.
+
+Important: If symptoms worsen or you experience difficulty breathing, chest pain, or high fever, seek immediate medical attention."""
+    
+    pdf.multi_cell(0, 6, english_summary)
+    pdf.ln(3)
+    
+    # Hindi summary
     hindi_report = report_data.get('hindi_patient', '')
     if hindi_report and hindi_report.strip():
-        pdf.section_title('Hindi Report (Patient Copy)', '')
+        if pdf.hindi_font_available:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.cell(0, 6, 'Hindi:', 0, 1)
+            pdf.set_font('DejaVu', '', 10)
+            
+            # Limit Hindi text
+            if len(hindi_report) > 600:
+                hindi_report = hindi_report[:600] + "..."
+            
+            pdf.multi_cell(0, 6, hindi_report)
+        else:
+            pdf.set_font('Arial', 'B', 10)
+            pdf.cell(0, 6, 'Hindi:', 0, 1)
+            pdf.set_font('Arial', 'I', 9)
+            pdf.cell(0, 6, "[Hindi translation available - DejaVu Sans font required]", 0, 1)
         
-        # Note: FPDF doesn't support Hindi fonts - show placeholder
-        pdf.set_font('Arial', 'I', 9)
-        pdf.multi_cell(0, 6, "[Hindi translation available - requires Unicode font support for display]")
         pdf.ln(3)
     
     # Disclaimer Section
