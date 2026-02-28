@@ -2,7 +2,7 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from supabase import create_client
+from supabase_wrapper import create_client
 import pandas as pd
 import folium
 from streamlit_folium import folium_static
@@ -19,11 +19,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for blue theme
+# Custom CSS for dark theme
 st.markdown("""
 <style>
     .main {
-        background-color: #f0f8ff;
+        background-color: #0e1117;
     }
     .stButton>button {
         background-color: #1e88e5;

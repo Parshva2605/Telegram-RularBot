@@ -2,7 +2,7 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from supabase import create_client
+from supabase_wrapper import create_client
 import pandas as pd
 
 load_dotenv()
@@ -11,7 +11,7 @@ st.set_page_config(page_title="Medicine Reminders", page_icon="💊", layout="wi
 
 st.markdown("""
 <style>
-    .main {background-color: #f0f8ff;}
+    .main {background-color: #0e1117;}
     .stButton>button {
         background-color: #1e88e5;
         color: white;

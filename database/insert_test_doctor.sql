@@ -1,9 +1,14 @@
 -- ============================================
--- INSERT TEST DOCTOR FOR DASHBOARD LOGIN
+-- INSERT/UPDATE TEST DOCTOR FOR DASHBOARD LOGIN
 -- Run this in Supabase SQL Editor
 -- ============================================
 
--- Update existing test doctor with correct access code
+-- First, check what doctors exist
+SELECT phone, access_code, name, phc, active FROM doctors ORDER BY phone;
+
+-- ============================================
+-- OPTION 1: Update existing test doctor
+-- ============================================
 UPDATE doctors 
 SET access_code = 'TEST1234',
     name = 'Dr. Test Kumar',
@@ -12,7 +17,9 @@ SET access_code = 'TEST1234',
     active = true
 WHERE phone = '+919999999999';
 
--- If update didn't work (doctor doesn't exist), insert new one
+-- ============================================
+-- OPTION 2: Insert new test doctor (if doesn't exist)
+-- ============================================
 INSERT INTO doctors (
     phone, 
     telegram_id, 
@@ -42,26 +49,44 @@ ON CONFLICT (phone) DO UPDATE SET
     phc = 'Test PHC',
     active = true;
 
--- Verify the update
-SELECT phone, access_code, name, phc FROM doctors WHERE phone = '+919999999999';
+-- ============================================
+-- Verify the test doctor exists
+-- ============================================
+SELECT 
+    phone, 
+    access_code, 
+    name, 
+    phc, 
+    mci_reg,
+    active,
+    rating,
+    total_cases
+FROM doctors 
+WHERE phone IN ('+919999999999', '+919876543210')
+ORDER BY phone;
 
 -- ============================================
--- ALTERNATIVE: Use existing doctor
+-- READY TO USE CREDENTIALS
 -- ============================================
--- You can also use this existing doctor:
+-- After running this SQL, you can login with:
+--
+-- OPTION 1 (Recommended - Already exists):
 -- Phone: +919876543210
 -- Access Code: TEST1234
 -- Name: Dr. Shah
+--
+-- OPTION 2 (Test doctor):
+-- Phone: +919999999999
+-- Access Code: TEST1234
+-- Name: Dr. Test Kumar
 -- ============================================
 
 -- ============================================
--- LOGIN CREDENTIALS FOR DASHBOARD
+-- TROUBLESHOOTING
 -- ============================================
--- Option 1:
--- Phone: +919999999999
--- Access Code: TEST1234
---
--- Option 2 (Already exists):
--- Phone: +919876543210
--- Access Code: TEST1234
+-- If login still fails, check the actual access code:
+SELECT phone, access_code, name FROM doctors WHERE phone = '+919876543210';
+
+-- If you want to set a custom access code:
+-- UPDATE doctors SET access_code = 'MYCODE123' WHERE phone = '+919876543210';
 -- ============================================
