@@ -806,6 +806,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         try:
             if supabase and supabase_connected:
+                # Get current timestamp
+                from datetime import datetime as dt
+                current_time = dt.now().isoformat()
+                
                 # Insert X-ray request
                 request_data = {
                     'user_id': user_id,
@@ -816,7 +820,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     'symptoms': form.get('symptoms'),
                     'doctor_phone': doctor_phone,
                     'status': 'pending',
-                    'consent_time': datetime.now().isoformat()
+                    'consent_time': current_time
                 }
                 response = supabase.table('xray_requests').insert(request_data).execute()
                 
