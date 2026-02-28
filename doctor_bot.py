@@ -366,29 +366,102 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         phone = f"+{phone}"
     
     context.user_data['phone'] = phone
-    context.user_data['step'] = 'profile'
+    context.user_data['step'] = 'waiting_doctor_name'
+    context.user_data['doctor_form'] = {}  # Initialize form
     
     await update.message.reply_text(
         f"✅ Phone verified: {phone}\n\n"
-        f"Now send your details in this format:\n\n"
-        f"**Name | MCI Reg | PHC Name**\n\n"
-        f"Example:\n"
-        f"`Dr. Shah | GJMC12345 | Anklav PHC`",
-        reply_markup=ReplyKeyboardRemove(),
-        parse_mode='Markdown'
+        f"👨‍⚕️ Enter your full name:\n\n"
+        f"Example: Dr. Rajesh Shah",
+        reply_markup=ReplyKeyboardRemove()
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages - Profile registration"""
     text = update.message.text
     user = update.effective_user
+    step = context.user_data.get('step')
     
     if not supabase:
         await update.message.reply_text("⚠️ Database not connected. Bot is in TEST MODE.")
         return
     
-    if context.user_data.get('step') == 'profile':
-        # Parse profile format: Name | MCI | PHC
+    if step == 'waiting_doctor_name':
+        # Step 1: Get doctor name
+        context.user_data['doctor_form']['name'] = text
+        context.user_data['step'] = 'waiting_doctor_mci'
+        await update.message.reply_text(
+            "🩺 Enter your MCI Registration Number:\n\n"
+            "Example: GJMC12345"
+        )
+    
+    elif step == 'waiting_doctor_mci':
+        # Step 2: Get MCI registration
+        context.user_data['doctor_form']['mci'] = text
+        context.user_data['step'] = 'waiting_doctor_phc'
+        await update.message.reply_text(
+            "🏥 Enter your PHC (Primary Health Center) name:\n\n"
+            "Example: Anklav PHC"
+        )
+    
+    elif step == 'waiting_doctor_phc':
+        # Step 3: Get PHC and complete registration
+        context.user_data['doctor_form']['phc'] = text
+        form = context.user_data['doctor_form']
+        phone = context.user_data.get('phone', f"+91{user.id}")
+        
+        # Generate access code
+        access_code = ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(8))
+        
+        try:
+            # Insert doctor into database
+            result = supabase.table("doctors").insert({
+                "phone": phone,
+                "telegram_id": user.id,
+                "access_code": access_code,
+                "name": form['name'],
+                "mci_reg": form['mci'],
+                "phc": form['phc'],
+                "rating": 0.0,
+                "total_cases": 0,
+                "active": True
+            }).execute()
+            
+            logger.info(f"Doctor registered: {form['name']} (ID: {user.id})")
+            
+            # Store in context
+            context.user_data['doctor'] = result.data[0]
+            context.user_data['phone'] = phone
+            
+            # Success message
+            await update.message.reply_text(
+                f"✅ **REGISTRATION SUCCESSFUL**\n\n"
+                f"👨‍⚕️ {form['name']}\n"
+                f"🩺 MCI: {form['mci']}\n"
+                f"🏥 PHC: {form['phc']}\n\n"
+                f"🔐 **Access Code:** `{access_code}`\n\n"
+                f"⚠️ Save this code! Use it to login on the website.\n\n"
+                f"Choose an option below:",
+                parse_mode='Markdown'
+            )
+            
+            # Show main menu
+            await show_main_menu(update.message.chat_id, context)
+            
+            # Clear step
+            context.user_data['step'] = None
+            context.user_data.pop('doctor_form', None)
+            
+        except Exception as e:
+            logger.error(f"Error registering doctor: {e}")
+            await update.message.reply_text(
+                "❌ Error during registration. Please try again.\n"
+                "Use /start to restart."
+            )
+            context.user_data['step'] = None
+    
+    elif step == 'profile':
+        # Old format support (backward compatibility)
         parts = [p.strip() for p in text.split('|')]
         
         if len(parts) >= 3:

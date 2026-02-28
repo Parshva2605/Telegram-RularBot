@@ -796,8 +796,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'xray_consent_yes':
         lang = context.user_data.get('language', 'en')
-        context.user_data['state'] = 'waiting_xray_form'
-        await query.message.reply_text(TEXTS[lang]['xray_form_prompt'], reply_markup=ReplyKeyboardRemove())
+        context.user_data['state'] = 'waiting_xray_name'
+        context.user_data['patient_form'] = {}  # Initialize form
+        await query.message.reply_text("👤 Enter patient name:", reply_markup=ReplyKeyboardRemove())
     
     elif data.startswith('xray_doctor_'):
         doctor_phone = data.replace('xray_doctor_', '')
@@ -1428,6 +1429,61 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text(TEXTS[lang]['appointment_error'], reply_markup=get_main_menu_keyboard(lang))
         
         context.user_data['state'] = None
+    
+    elif state == 'waiting_xray_name':
+        # Step 1: Get patient name
+        context.user_data['patient_form']['name'] = text
+        context.user_data['state'] = 'waiting_xray_age'
+        await update.message.reply_text("🎂 Enter patient age:")
+    
+    elif state == 'waiting_xray_age':
+        # Step 2: Get patient age
+        try:
+            age = int(text)
+            if age <= 0 or age >= 120:
+                await update.message.reply_text("❌ Invalid age! Please enter age between 1-119:")
+                return
+            context.user_data['patient_form']['age'] = age
+            context.user_data['state'] = 'waiting_xray_village'
+            await update.message.reply_text("📍 Enter village/city name:")
+        except ValueError:
+            await update.message.reply_text("❌ Please enter a valid number for age:")
+    
+    elif state == 'waiting_xray_village':
+        # Step 3: Get village
+        context.user_data['patient_form']['village'] = text
+        context.user_data['state'] = 'waiting_xray_symptoms'
+        await update.message.reply_text("🩺 Describe symptoms:\n\nExample: Cough 5 days, chest pain, fever")
+    
+    elif state == 'waiting_xray_symptoms':
+        # Step 4: Get symptoms and show doctor list
+        context.user_data['patient_form']['symptoms'] = text
+        form = context.user_data['patient_form']
+        lang = context.user_data.get('language', 'en')
+        
+        # Get available doctors from Supabase
+        if supabase and supabase_connected:
+            doctors_response = supabase.table('doctors').select('phone, name, phc, rating').eq('active', True).order('rating', desc=True).limit(5).execute()
+            
+            if doctors_response.data and len(doctors_response.data) > 0:
+                keyboard = []
+                for doc in doctors_response.data:
+                    rating_stars = '⭐' * int(doc.get('rating', 0))
+                    btn_text = f"Dr. {doc['name']} {rating_stars} ({doc.get('phc', 'PHC')})"
+                    keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"xray_doctor_{doc['phone']}")])
+                keyboard.append([InlineKeyboardButton("🔙 Cancel", callback_data="back_menu")])
+                
+                await update.message.reply_text(
+                    f"✅ Patient: {form['name']} ({form['age']}y)\n📍 {form['village']}\n🩺 {form['symptoms']}\n\n👨‍⚕️ Choose PHC doctor:",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                context.user_data['state'] = None
+            else:
+                await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+                context.user_data['state'] = None
+        else:
+            await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+            context.user_data['state'] = None
     
     elif state == 'waiting_xray_form':
         # Parse X-ray form: Name|Age|Village|Symptoms
