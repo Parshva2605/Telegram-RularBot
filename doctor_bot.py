@@ -9,9 +9,19 @@ import os
 import asyncio
 import logging
 import secrets
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import json
+import base64
+from PIL import Image
+import io
+import ollama
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from supabase import create_client, Client
+from supabase_wrapper import create_client
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from supabase_wrapper import SupabaseClient as Client
+else:
+    Client = None
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -23,8 +33,29 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 MEDIMIND_DOCTOR_TOKEN = os.getenv("MEDIMIND_DOCTOR_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 
-# Initialize Supabase
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Debug: Print loaded values
+print("=== DOCTOR BOT CONFIG DEBUG ===")
+print(f"SUPABASE_URL: {SUPABASE_URL}")
+print(f"SUPABASE_KEY: {SUPABASE_KEY[:30] if SUPABASE_KEY else 'NOT SET'}...")
+print(f"DOCTOR_TOKEN: {MEDIMIND_DOCTOR_TOKEN[:20] if MEDIMIND_DOCTOR_TOKEN else 'NOT SET'}...")
+print("================================\n")
+
+# Initialize Supabase with error handling
+supabase = None
+supabase_connected = False
+try:
+    if SUPABASE_URL and SUPABASE_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        # Test connection
+        test = supabase.table("doctors").select("*", count='exact').limit(1).execute()
+        print(f"✅ Supabase connected! Doctor table accessible.")
+        supabase_connected = True
+    else:
+        print("❌ Supabase credentials not set")
+except Exception as e:
+    print(f"❌ Supabase connection error: {e}")
+    print("⚠️ Bot will run in TEST MODE (no database)")
+    supabase = None
 
 # Logging
 logging.basicConfig(
@@ -32,6 +63,158 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# ============================================
+# REAL OLLAMA VLM FUNCTIONS (RTX 3070)
+# ============================================
+
+def prepare_image_b64(image_path):
+    """Convert image to base64 for Ollama"""
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode('utf-8')
+    except Exception as e:
+        logger.error(f"Error encoding image: {e}")
+        return None
+
+def vlm_fast(image_path):
+    """⚡ FAST X-ray/Skin analysis (llava-llama3:8b 6GB VRAM)"""
+    try:
+        img_b64 = prepare_image_b64(image_path)
+        if not img_b64:
+            return "❌ Error: Could not process image"
+        
+        response = ollama.chat(model='llava-llama3:8b', messages=[
+            {
+                'role': 'user',
+                'content': 'Analyze this medical X-ray or skin image. Provide MCI-compliant findings only. Keep report short and focused on key observations.',
+                'images': [img_b64]
+            }
+        ])
+        
+        result = response['message']['content']
+        return f"⚡ **FAST ANALYSIS:**\n\n{result[:400]}..."
+    
+    except Exception as e:
+        logger.error(f"VLM Fast error: {e}")
+        return f"❌ Error in fast analysis: {str(e)}\n\nMake sure Ollama is running: `ollama serve`"
+
+def vlm_detailed(image_path):
+    """🔍 DETAILED CT/MRI/X-ray analysis (llava:13b 9GB VRAM)"""
+    try:
+        img_b64 = prepare_image_b64(image_path)
+        if not img_b64:
+            return "❌ Error: Could not process image"
+        
+        response = ollama.chat(model='llava:13b', messages=[
+            {
+                'role': 'user',
+                'content': '''Medical image analysis for MCI decision support:
+
+1. Findings (include ICD10 codes if clearly identifiable)
+2. Risk level (LOW/MEDIUM/HIGH)
+3. Next steps (ECG/blood test/refer to specialist)
+4. Suggested medications (List A/B drugs only, no narcotics)
+
+Provide detailed, structured report.''',
+                'images': [img_b64]
+            }
+        ])
+        
+        result = response['message']['content']
+        return f"🔍 **DETAILED REPORT:**\n\n{result}"
+    
+    except Exception as e:
+        logger.error(f"VLM Detailed error: {e}")
+        return f"❌ Error in detailed analysis: {str(e)}\n\nMake sure Ollama is running: `ollama serve`"
+
+def translate_hindi(ai_report, diseases_str):
+    """🇮🇳 Translate to Hindi using sarvam-1 model for rural patients"""
+    try:
+        response = ollama.chat(model='mashriram/sarvam-1', messages=[
+            {
+                'role': 'user',
+                'content': f'''Translate to simple Hindi for rural patient:
+
+Medical Report: {ai_report[:300]}
+
+Diseases Detected: {diseases_str}
+
+Use short, simple sentences. Avoid complex medical terms.'''
+            }
+        ])
+        
+        return response['message']['content']
+    
+    except Exception as e:
+        logger.error(f"Hindi translation error: {e}")
+        return "❌ Hindi translation unavailable (sarvam-1 model not loaded)"
+
+def analyze_xray_14diseases(image_path):
+    """🎯 14-DISEASE MODEL + VLM reasoning + Hindi translation"""
+    try:
+        # STUB: Your 14-disease DL model will replace this
+        # For now, using placeholder confidence scores
+        diseases = {
+            "Pneumonia": 0.92, "Cardiomegaly": 0.78, "Effusion": 0.65,
+            "Atelectasis": 0.58, "Pneumothorax": 0.12, "Fracture": 0.08,
+            "TB": 0.05, "Consolidation": 0.45, "Edema": 0.22, "Emphysema": 0.11,
+            "Fibrosis": 0.09, "Pleural Thickening": 0.33, "Hernia": 0.02,
+            "Mass": 0.41, "Nodule": 0.27
+        }
+        
+        # Get top 3 diseases
+        top3 = sorted(diseases.items(), key=lambda x: x[1], reverse=True)[:3]
+        top3_str = "\n".join([f"• {k}: {v:.0%}" for k, v in top3])
+        diseases_str = ", ".join([k for k, v in top3])
+        
+        # VLM reasoning on DL model results
+        img_b64 = prepare_image_b64(image_path)
+        if not img_b64:
+            return "❌ Error: Could not process image"
+        
+        dl_prompt = f"""X-ray 14-disease deep learning scan detected:
+
+{top3_str}
+
+Based on these AI detections, provide:
+1. Clinical interpretation (MCI-compliant)
+2. ICD10 codes if applicable
+3. Recommended PHC tests (ECG, blood work, etc.)
+4. List A/B medications to consider
+5. Urgency level (LOW/MEDIUM/HIGH)
+
+Patient context: Rural PHC setting, limited resources."""
+        
+        vlm_response = ollama.chat(model='llava:13b', messages=[
+            {'role': 'user', 'content': dl_prompt, 'images': [img_b64]}
+        ])
+        
+        ai_report = vlm_response['message']['content']
+        
+        # Translate to Hindi for patient
+        hindi_report = translate_hindi(ai_report, diseases_str)
+        
+        # Format final report
+        result = f"""🎯 **14-DISEASES + VLM ANALYSIS:**
+
+📊 **DL SCAN RESULTS:**
+{top3_str}
+
+🔍 **AI CLINICAL REPORT:**
+{ai_report[:350]}...
+
+🇮🇳 **HINDI (Patient):**
+{hindi_report[:250]}...
+
+---
+[📝 EDIT] [✅ PDF & SEND]"""
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"14-disease analysis error: {e}")
+        return f"❌ Error in 14-disease analysis: {str(e)}\n\nMake sure Ollama is running with llava:13b and sarvam-1 models"
 
 # ============================================
 # COMMAND HANDLERS
@@ -42,6 +225,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
     logger.info(f"Doctor bot /start by user {user.id} (@{user.username})")
+    
+    # Check if Supabase is connected
+    if not supabase:
+        await update.message.reply_text(
+            "⚠️ Database not connected. Bot is in TEST MODE.\n\n"
+            "Please contact admin to fix Supabase configuration."
+        )
+        return
     
     # Check if doctor already registered
     try:
@@ -59,26 +250,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🩺 MCI: {doctor.get('mci_reg', 'N/A')}\n"
                 f"⭐ Rating: {doctor.get('rating', 0):.1f}/5.0\n"
                 f"📊 Cases: {doctor.get('total_cases', 0)}\n\n"
-                f"Choose an option below:"
+                f"Choose an option below:",
+                reply_markup=ReplyKeyboardRemove()
             )
-            await show_main_menu(update, context)
+            await show_main_menu(user.id, context)
         else:
-            # New doctor registration
-            phone = f"+91{user.id}"  # Fallback phone
-            context.user_data['phone'] = phone
-            context.user_data['step'] = 'profile'
+            # New doctor registration - request phone
+            keyboard = [[KeyboardButton("📱 Share Phone to Verify", request_contact=True)]]
+            reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
             
             await update.message.reply_text(
-                f"👨‍⚕️ **DOCTOR REGISTRATION**\n\n"
-                f"📱 Telegram ID: {user.id}\n"
-                f"📞 Phone: {phone}\n\n"
-                f"Please enter your details in this format:\n\n"
-                f"**Name | MCI Reg | PHC Name**\n\n"
-                f"Example:\n"
-                f"`Dr. Shah | GJMC12345 | Anklav PHC`\n\n"
-                f"Send your details now:",
+                "👨‍⚕️ **DOCTOR REGISTRATION**\n\n"
+                "To register, please share your phone number.\n\n"
+                "Tap the button below to verify:",
+                reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
+            context.user_data['step'] = 'awaiting_phone'
+            
     except Exception as e:
         logger.error(f"Error in start: {e}")
         await update.message.reply_text(
@@ -88,6 +277,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def regen_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /regen_code command - Generate new access code"""
     user = update.effective_user
+    
+    if not supabase:
+        await update.message.reply_text("⚠️ Database not connected. Bot is in TEST MODE.")
+        return
     
     try:
         doctors = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
@@ -123,6 +316,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /status command - Check queue status"""
     user = update.effective_user
     
+    if not supabase:
+        await update.message.reply_text("⚠️ Database not connected. Bot is in TEST MODE.")
+        return
+    
     try:
         doctors = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
         
@@ -152,10 +349,43 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # MESSAGE HANDLERS
 # ============================================
 
+async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle phone contact sharing"""
+    user = update.effective_user
+    contact = update.message.contact
+    
+    if contact.user_id != user.id:
+        await update.message.reply_text(
+            "❌ Please share YOUR own phone number, not someone else's.",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+    
+    phone = contact.phone_number
+    if not phone.startswith('+'):
+        phone = f"+{phone}"
+    
+    context.user_data['phone'] = phone
+    context.user_data['step'] = 'profile'
+    
+    await update.message.reply_text(
+        f"✅ Phone verified: {phone}\n\n"
+        f"Now send your details in this format:\n\n"
+        f"**Name | MCI Reg | PHC Name**\n\n"
+        f"Example:\n"
+        f"`Dr. Shah | GJMC12345 | Anklav PHC`",
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode='Markdown'
+    )
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages - Profile registration"""
     text = update.message.text
     user = update.effective_user
+    
+    if not supabase:
+        await update.message.reply_text("⚠️ Database not connected. Bot is in TEST MODE.")
+        return
     
     if context.user_data.get('step') == 'profile':
         # Parse profile format: Name | MCI | PHC
@@ -201,7 +431,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 
                 # Show main menu
-                await show_main_menu(update, context)
+                await show_main_menu(update.message.chat_id, context)
                 
                 # Clear step
                 context.user_data['step'] = None
@@ -226,11 +456,90 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❓ I don't understand. Use /start to begin."
         )
 
+async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle photo uploads for X-ray analysis"""
+    user = update.effective_user
+    
+    # Check if we're expecting a photo
+    if 'scan_type' not in context.user_data:
+        await update.message.reply_text(
+            "❓ Please select scan type first.\n"
+            "Use /start → Analyze Image"
+        )
+        return
+    
+    scan_type = context.user_data.get('scan_type', 'X-ray')
+    mode = context.user_data.get('mode', 'mode_detailed')
+    
+    await update.message.reply_text(
+        f"⏳ Processing {scan_type} image with Ollama VLM...\n"
+        f"Please wait (RTX 3070 inference)..."
+    )
+    
+    try:
+        # Download photo
+        photo = update.message.photo[-1]  # Highest quality
+        file = await context.bot.get_file(photo.file_id)
+        image_path = f"temp_{photo.file_id}.jpg"
+        await file.download_to_drive(image_path)
+        
+        logger.info(f"Photo received from doctor {user.id}: {image_path}, mode: {mode}")
+        
+        # Analyze based on mode
+        if scan_type == "X-ray" and mode == "mode_14diseases":
+            # 14-disease model + VLM + Hindi
+            result = analyze_xray_14diseases(image_path)
+            await update.message.reply_text(result, parse_mode='Markdown')
+            
+        elif mode == "mode_fast":
+            # Fast VLM (llava-llama3:8b)
+            result = vlm_fast(image_path)
+            await update.message.reply_text(result, parse_mode='Markdown')
+            
+        elif mode == "mode_detailed":
+            # Detailed VLM (llava:13b)
+            result = vlm_detailed(image_path)
+            await update.message.reply_text(result, parse_mode='Markdown')
+        
+        else:
+            await update.message.reply_text(
+                f"❌ Unknown mode: {mode}\n"
+                f"Please try again with /start → Analyze Image"
+            )
+        
+        # Clean up temp file
+        if os.path.exists(image_path):
+            os.remove(image_path)
+            logger.info(f"Cleaned up temp file: {image_path}")
+        
+        # Clear context
+        context.user_data.pop('scan_type', None)
+        context.user_data.pop('mode', None)
+        
+        # Show menu again
+        await asyncio.sleep(1)
+        await show_main_menu(update.message.chat_id, context)
+        
+    except Exception as e:
+        logger.error(f"Error processing photo: {e}")
+        await update.message.reply_text(
+            f"❌ Error analyzing image: {str(e)}\n\n"
+            f"Make sure Ollama is running:\n"
+            f"`ollama serve`\n\n"
+            f"And models are installed:\n"
+            f"`ollama pull llava:13b`\n"
+            f"`ollama pull llava-llama3:8b`\n"
+            f"`ollama pull mashriram/sarvam-1`"
+        )
+        # Clean up on error
+        if 'image_path' in locals() and os.path.exists(image_path):
+            os.remove(image_path)
+
 # ============================================
 # MENU FUNCTIONS
 # ============================================
 
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_main_menu(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     """Show main doctor menu"""
     keyboard = [
         [InlineKeyboardButton("📋 My Queue", callback_data="queue")],
@@ -240,18 +549,12 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    if update.callback_query:
-        await update.callback_query.edit_message_text(
-            "🎯 **DOCTOR MENU**\n\nChoose an option:",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-    else:
-        await update.message.reply_text(
-            "🎯 **DOCTOR MENU**\n\nChoose an option:",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="🎯 **DOCTOR MENU**\n\nChoose an option:",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
 
 # ============================================
 # BUTTON HANDLERS
@@ -263,6 +566,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user = update.effective_user
+    
+    if not supabase:
+        await query.edit_message_text("⚠️ Database not connected. Bot is in TEST MODE.")
+        return
     
     try:
         # Get doctor info
@@ -279,16 +586,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Show pending X-rays assigned to this doctor
             requests = supabase.table("xray_requests").select(
                 "id, patient_name, age, village, symptoms, status, created_at"
-            ).eq("doctor_phone", phone).order("created_at", desc=True).limit(10).execute()
+            ).eq("doctor_phone", phone).eq("status", "pending").order("created_at", desc=True).limit(10).execute()
             
             if requests.data and len(requests.data) > 0:
                 text = "📋 **MY QUEUE**\n\n"
                 for r in requests.data:
-                    status_emoji = "🔴" if r['status'] == 'pending' else "✅"
-                    symptoms_short = r['symptoms'][:40] + "..." if r['symptoms'] and len(r['symptoms']) > 40 else r['symptoms']
-                    text += f"{status_emoji} **{r['patient_name']}** ({r['age']}y)\n"
-                    text += f"   📍 {r.get('village', 'N/A')} | {symptoms_short}\n"
-                    text += f"   ID: {r['id']}\n\n"
+                    symptoms_short = r['symptoms'][:60] + "..." if r['symptoms'] and len(r['symptoms']) > 60 else (r['symptoms'] or 'No symptoms')
+                    text += f"🔴 **#{r['id']}** {r['patient_name']} ({r['age']}y) - {r.get('village', 'N/A')}\n"
+                    text += f"   {symptoms_short}\n\n"
                 
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
                 await query.edit_message_text(
@@ -299,17 +604,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
                 await query.edit_message_text(
-                    "✅ No X-rays in your queue!\n\nAll cases reviewed.",
+                    "✅ No pending X-rays in your queue!\n\nAll cases reviewed.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
         
         elif query.data == "analyze":
             # Show scan type selection
             keyboard = [
-                [InlineKeyboardButton("🫁 X-ray", callback_data="scan_xray")],
-                [InlineKeyboardButton("🧠 CT Scan", callback_data="scan_ct"), 
-                 InlineKeyboardButton("🩻 MRI", callback_data="scan_mri")],
-                [InlineKeyboardButton("🩹 Skin", callback_data="scan_skin")],
+                [InlineKeyboardButton("🫁 X-ray", callback_data="xray")],
+                [InlineKeyboardButton("🧠 CT Scan", callback_data="ct"), 
+                 InlineKeyboardButton("🩻 MRI", callback_data="mri")],
+                [InlineKeyboardButton("🩹 Skin", callback_data="skin")],
                 [InlineKeyboardButton("🔙 Back", callback_data="back_menu")]
             ]
             await query.edit_message_text(
@@ -318,19 +623,43 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
         
-        elif query.data.startswith("scan_"):
-            scan_type = query.data.replace("scan_", "").upper()
+        elif query.data == "xray":
+            # X-ray mode selection
+            context.user_data["scan_type"] = "X-ray"
+            keyboard = [
+                [InlineKeyboardButton("⚡ FAST (llava-llama3:8b)", callback_data="mode_fast")],
+                [InlineKeyboardButton("🔍 DETAILED (llava:13b)", callback_data="mode_detailed")],
+                [InlineKeyboardButton("🎯 14-DISEASES (YOUR MODEL)", callback_data="mode_14diseases")],
+                [InlineKeyboardButton("🔙 Back", callback_data="analyze")]
+            ]
             await query.edit_message_text(
-                f"🩻 **{scan_type} ANALYSIS**\n\n"
-                f"Feature coming soon!\n\n"
-                f"This will allow you to:\n"
-                f"• Upload {scan_type} images\n"
-                f"• Get AI analysis\n"
-                f"• Add doctor notes\n"
-                f"• Generate reports"
+                "⚙️ **X-RAY MODE** (RTX 3070):\n\nSelect analysis mode:",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode='Markdown'
             )
-            await asyncio.sleep(2)
-            await show_main_menu(update, context)
+        
+        elif query.data in ["ct", "mri", "skin"]:
+            # Other scan types - only detailed mode
+            context.user_data["scan_type"] = query.data.upper()
+            context.user_data["mode"] = "mode_detailed"
+            await query.edit_message_text(
+                f"📤 **Upload {context.user_data['scan_type']} image...**\n\n"
+                f"Send photo now (supports phone cameras)\n"
+                f"Mode: DETAILED analysis",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data.startswith("mode_"):
+            # Mode selected - request photo
+            context.user_data["mode"] = query.data
+            scan_type = context.user_data.get("scan_type", "X-ray")
+            mode_name = query.data.replace('mode_', '').replace('_', ' ').title()
+            await query.edit_message_text(
+                f"📤 **Upload {scan_type} image for {mode_name} analysis...**\n\n"
+                f"Send photo now (blurry phone OK)\n"
+                f"Waiting for image...",
+                parse_mode='Markdown'
+            )
         
         elif query.data == "old_reports":
             # Show reviewed cases
@@ -376,7 +705,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         
         elif query.data == "back_menu":
-            await show_main_menu(update, context)
+            await show_main_menu(query.message.chat_id, context)
         
         else:
             await query.edit_message_text("❓ Unknown option")
@@ -406,6 +735,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("regen_code", regen_code))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
