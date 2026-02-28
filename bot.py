@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from geopy.distance import geodesic
-from supabase import create_client
+from supabase_wrapper import create_client
 from datetime import datetime
 
 load_dotenv()
@@ -123,6 +123,13 @@ TEXTS = {
         'issue_description_prompt': '📝 Describe your problem in detail:',
         'issue_submitted': '✅ Problem reported successfully!\n\nYour issue has been forwarded to admin.\n\nYou will be contacted soon.',
         'issue_error': '❌ Failed to submit problem. Please try again.',
+        'xray_consent': '🩻 X-RAY REQUEST\n\n📝 Reply with:\nName|Age|Village|Symptoms\n\nExample: Ramesh Patel|45|Anklav|Cough 5 days chest pain\n\n⚠️ AI helps doctors only. Explicit consent required:',
+        'xray_form_prompt': '📝 Enter patient details:\n\nFormat: Name|Age|Village|Symptoms\n\nExample: Ramesh Patel|45|Anklav|Cough 5 days chest pain',
+        'xray_form_error': '❌ Wrong format!\n\nPlease use: Name|Age|Village|Symptoms',
+        'xray_doctor_select': '✅ Form saved: {} ({}) {}\n\n👨‍⚕️ Choose PHC doctor:',
+        'xray_sent': '✅ Sent to doctor!\n\nUse /status to check progress.\n\nDoctor will send PDF report here.',
+        'xray_status': '📊 X-Ray Request Status:\n\n',
+        'no_xray_requests': '📭 No X-ray requests found.',
     },
     'hi': {
         'welcome': '🏥 मेडीमाइंड रूरल में आपका स्वागत है!\n\nअपनी पसंदीदा भाषा चुनें:',
@@ -198,6 +205,13 @@ TEXTS = {
         'issue_description_prompt': '📝 अपनी समस्या का विस्तार से वर्णन करें:',
         'issue_submitted': '✅ समस्या सफलतापूर्वक रिपोर्ट की गई!\n\nआपकी समस्या एडमिन को भेज दी गई है।\n\nआपसे जल्द ही संपर्क किया जाएगा।',
         'issue_error': '❌ समस्या सबमिट करने में विफल। कृपया पुनः प्रयास करें।',
+        'xray_consent': '🩻 एक्स-रे अनुरोध\n\n📝 उत्तर दें:\nनाम|उम्र|गांव|लक्षण\n\nउदाहरण: रमेश पटेल|45|अंकलाव|5 दिन से खांसी सीने में दर्द\n\n⚠️ AI केवल डॉक्टरों की मदद करता है। स्पष्ट सहमति आवश्यक:',
+        'xray_form_prompt': '📝 रोगी विवरण दर्ज करें:\n\nप्रारूप: नाम|उम्र|गांव|लक्षण\n\nउदाहरण: रमेश पटेल|45|अंकलाव|5 दिन से खांसी सीने में दर्द',
+        'xray_form_error': '❌ गलत प्रारूप!\n\nकृपया उपयोग करें: नाम|उम्र|गांव|लक्षण',
+        'xray_doctor_select': '✅ फॉर्म सहेजा गया: {} ({}) {}\n\n👨‍⚕️ PHC डॉक्टर चुनें:',
+        'xray_sent': '✅ डॉक्टर को भेजा गया!\n\nप्रगति जांचने के लिए /status उपयोग करें।\n\nडॉक्टर यहां PDF रिपोर्ट भेजेंगे।',
+        'xray_status': '📊 एक्स-रे अनुरोध स्थिति:\n\n',
+        'no_xray_requests': '📭 कोई एक्स-रे अनुरोध नहीं मिला।',
     },
     'gu': {
         'welcome': '🏥 મેડીમાઇન્ડ રૂરલમાં આપનું સ્વાગત છે!\n\nતમારી પસંદીદી ભાષા પસંદ કરો:',
@@ -282,6 +296,13 @@ TEXTS = {
         'no_reminders': '📭 કોઈ સક્રિય રીમાઇન્ડર નથી.',
         'reminder_stopped': '✅ રીમાઇન્ડર બંધ થયું.',
         'reminder_notification': '💊 દવા રીમાઇન્ડર!\n\n{}\n📋 {}\n\n⏰ તમારી દવા લેવાનો સમય!',
+        'xray_consent': '🩻 એક્સ-રે અનુરોધ\n\n📝 જવાબ આપો:\nનામ|ઉંમર|ગામ|લક્ષણો\n\nઉદાહરણ: રમેશ પટેલ|45|અંકલાવ|5 દિવસથી ઉધરસ છાતીમાં દુખાવો\n\n⚠️ AI ફક્ત ડૉક્ટરોને મદદ કરે છે. સ્પષ્ટ સંમતિ જરૂરી:',
+        'xray_form_prompt': '📝 દર્દીની વિગતો દાખલ કરો:\n\nફોર્મેટ: નામ|ઉંમર|ગામ|લક્ષણો\n\nઉદાહરણ: રમેશ પટેલ|45|અંકલાવ|5 દિવસથી ઉધરસ છાતીમાં દુખાવો',
+        'xray_form_error': '❌ ખોટું ફોર્મેટ!\n\nકૃપા કરીને વાપરો: નામ|ઉંમર|ગામ|લક્ષણો',
+        'xray_doctor_select': '✅ ફોર્મ સાચવ્યું: {} ({}) {}\n\n👨‍⚕️ PHC ડૉક્ટર પસંદ કરો:',
+        'xray_sent': '✅ ડૉક્ટરને મોકલ્યું!\n\nપ્રગતિ તપાસવા /status વાપરો।\n\nડૉક્ટર અહીં PDF રિપોર્ટ મોકલશે।',
+        'xray_status': '📊 એક્સ-રે અનુરોધ સ્થિતિ:\n\n',
+        'no_xray_requests': '📭 કોઈ એક્સ-રે અનુરોધ મળ્યો નહીં।',
     }
 }
 
@@ -289,23 +310,23 @@ MENU_BUTTONS = {
     'en': [
         ['🏥 Nearest Hospital', '🚑 Emergency Help'],
         ['💊 Medicine Reminder', '📅 Visit Planner'],
-        ['👶 Maternal Health', '👩‍⚕️ Health Worker Mode'],
-        ['🌿 Govt Schemes', '📢 Raise Problem'],
-        ['🔄 Change Language']
+        ['👶 Maternal Health', '🩻 X-Ray Check'],
+        ['👩‍⚕️ Health Worker Mode', '🌿 Govt Schemes'],
+        ['📢 Raise Problem', '🔄 Change Language']
     ],
     'hi': [
         ['🏥 निकटतम अस्पताल', '🚑 आपातकालीन सहायता'],
         ['💊 दवा अनुस्मारक', '📅 यात्रा योजनाकार'],
-        ['👶 मातृ स्वास्थ्य', '👩‍⚕️ स्वास्थ्य कार्यकर्ता मोड'],
-        ['🌿 सरकारी योजनाएं', '📢 समस्या दर्ज करें'],
-        ['🔄 भाषा बदलें']
+        ['👶 मातृ स्वास्थ्य', '🩻 एक्स-रे जांच'],
+        ['👩‍⚕️ स्वास्थ्य कार्यकर्ता मोड', '🌿 सरकारी योजनाएं'],
+        ['📢 समस्या दर्ज करें', '🔄 भाषा बदलें']
     ],
     'gu': [
         ['🏥 નજીકની હોસ્પિટલ', '🚑 કટોકટી સહાય'],
         ['💊 દવા રીમાઇન્ડર', '📅 મુલાકાત આયોજક'],
-        ['👶 માતૃત્વ આરોગ્ય', '👩‍⚕️ આરોગ્ય કાર્યકર મોડ'],
-        ['🌿 સરકારી યોજનાઓ', '📢 સમસ્યા નોંધાવો'],
-        ['🔄 ભાષા બદલો']
+        ['👶 માતૃત્વ આરોગ્ય', '🩻 એક્સ-રે તપાસ'],
+        ['👩‍⚕️ આરોગ્ય કાર્યકર મોડ', '🌿 સરકારી યોજનાઓ'],
+        ['📢 સમસ્યા નોંધાવો', '🔄 ભાષા બદલો']
     ]
 }
 
@@ -340,9 +361,9 @@ def get_main_menu_keyboard(language: str):
     menu_ids = [
         ['hospital', 'emergency'],
         ['medicine', 'visit'],
-        ['maternal', 'worker'],
-        ['schemes', 'raise_problem'],
-        ['change_lang']
+        ['maternal', 'xray_check'],
+        ['worker', 'schemes'],
+        ['raise_problem', 'change_lang']
     ]
     keyboard = []
     for row_btns, row_ids in zip(buttons, menu_ids):
@@ -689,6 +710,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['state'] = None
     await update.message.reply_text(TEXTS['en']['welcome'], reply_markup=get_language_keyboard())
 
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Check X-ray request status"""
+    lang = context.user_data.get('language', 'en')
+    user_id = update.effective_user.id
+    
+    try:
+        if supabase and supabase_connected:
+            # Get user's X-ray requests
+            response = supabase.table('xray_requests').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(5).execute()
+            
+            if response.data and len(response.data) > 0:
+                text = TEXTS[lang]['xray_status']
+                status_emoji = {'pending': '⏳', 'reviewed': '🔍', 'sent': '✅', 'cancelled': '❌'}
+                
+                for r in response.data:
+                    emoji = status_emoji.get(r.get('status', 'pending'), '❓')
+                    text += f"{emoji} {r['patient_name']} ({r['age']}y) - {r.get('status', 'pending')}\n"
+                    text += f"   📍 {r.get('village', 'N/A')}\n"
+                    if r.get('reviewed_at'):
+                        text += f"   ✅ Reviewed: {r['reviewed_at']}\n"
+                    text += "\n"
+                
+                await update.message.reply_text(text, reply_markup=get_main_menu_keyboard(lang))
+            else:
+                await update.message.reply_text(TEXTS[lang]['no_xray_requests'], reply_markup=get_main_menu_keyboard(lang))
+        else:
+            await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+    except Exception as e:
+        logger.error(f"Status check error: {e}")
+        await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -733,6 +785,66 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         lang = context.user_data.get('language', 'en')
         context.user_data['state'] = None
         await query.edit_message_text(TEXTS[lang]['maternal_menu'], reply_markup=get_maternal_keyboard(lang))
+    
+    elif data == 'menu_xray_check':
+        lang = context.user_data.get('language', 'en')
+        keyboard = [[InlineKeyboardButton("✅ I consent", callback_data="xray_consent_yes")],
+                    [InlineKeyboardButton("🔙 Back", callback_data="back_menu")]]
+        await query.edit_message_text(TEXTS[lang]['xray_consent'], reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    elif data == 'xray_consent_yes':
+        lang = context.user_data.get('language', 'en')
+        context.user_data['state'] = 'waiting_xray_form'
+        await query.message.reply_text(TEXTS[lang]['xray_form_prompt'], reply_markup=ReplyKeyboardRemove())
+    
+    elif data.startswith('xray_doctor_'):
+        doctor_phone = data.replace('xray_doctor_', '')
+        lang = context.user_data.get('language', 'en')
+        form = context.user_data.get('patient_form', {})
+        user_id = query.from_user.id
+        username = query.from_user.username or query.from_user.first_name or 'Unknown'
+        
+        try:
+            if supabase and supabase_connected:
+                # Insert X-ray request
+                request_data = {
+                    'user_id': user_id,
+                    'username': username,
+                    'patient_name': form.get('name'),
+                    'age': form.get('age'),
+                    'village': form.get('village'),
+                    'symptoms': form.get('symptoms'),
+                    'doctor_phone': doctor_phone,
+                    'status': 'pending',
+                    'consent_time': datetime.now().isoformat()
+                }
+                response = supabase.table('xray_requests').insert(request_data).execute()
+                
+                # Get doctor's telegram_id to notify
+                doctor_response = supabase.table('doctors').select('telegram_id, name').eq('phone', doctor_phone).execute()
+                
+                if doctor_response.data and len(doctor_response.data) > 0:
+                    doctor = doctor_response.data[0]
+                    doctor_telegram_id = doctor.get('telegram_id')
+                    
+                    # Notify doctor
+                    if doctor_telegram_id:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=doctor_telegram_id,
+                                text=f"🩻 NEW X-RAY REQUEST\n\n👤 {form['name']} ({form['age']}y)\n📍 {form['village']}\n🩺 {form['symptoms']}\n\n📋 Check /status for details"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to notify doctor: {e}")
+                
+                await query.edit_message_text(TEXTS[lang]['xray_sent'], reply_markup=get_main_menu_keyboard(lang))
+                context.user_data.pop('patient_form', None)
+                context.user_data['state'] = None
+            else:
+                await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+        except Exception as e:
+            logger.error(f"X-ray request error: {e}")
+            await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
     
     elif data == 'menu_schemes':
         lang = context.user_data.get('language', 'en')
@@ -1315,6 +1427,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         context.user_data['state'] = None
     
+    elif state == 'waiting_xray_form':
+        # Parse X-ray form: Name|Age|Village|Symptoms
+        parts = [p.strip() for p in text.split('|')]
+        
+        if len(parts) >= 4:
+            patient_name, age, village, symptoms = parts[0], parts[1], parts[2], parts[3]
+            
+            try:
+                age_int = int(age)
+                
+                # Store form data
+                context.user_data['patient_form'] = {
+                    'name': patient_name,
+                    'age': age_int,
+                    'village': village,
+                    'symptoms': symptoms
+                }
+                
+                # Get available doctors from Supabase
+                if supabase and supabase_connected:
+                    doctors_response = supabase.table('doctors').select('phone, name, phc, rating').eq('active', True).order('rating', desc=True).limit(5).execute()
+                    
+                    if doctors_response.data and len(doctors_response.data) > 0:
+                        keyboard = []
+                        for doc in doctors_response.data:
+                            rating_stars = '⭐' * int(doc.get('rating', 0))
+                            btn_text = f"Dr. {doc['name']} {rating_stars} ({doc.get('phc', 'PHC')})"
+                            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"xray_doctor_{doc['phone']}")])
+                        keyboard.append([InlineKeyboardButton("🔙 Cancel", callback_data="back_menu")])
+                        
+                        await update.message.reply_text(
+                            TEXTS[lang]['xray_doctor_select'].format(patient_name, age, village),
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                    else:
+                        await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+                else:
+                    await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+                
+            except ValueError:
+                await update.message.reply_text(TEXTS[lang]['xray_form_error'], reply_markup=ReplyKeyboardRemove())
+        else:
+            await update.message.reply_text(TEXTS[lang]['xray_form_error'], reply_markup=ReplyKeyboardRemove())
+    
     elif state == 'waiting_appointment_cancel':
         try:
             appointment_num = int(text)
@@ -1513,6 +1669,7 @@ def main() -> None:
     
     application = Application.builder().token(token).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("status", status))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.LOCATION, handle_location))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
