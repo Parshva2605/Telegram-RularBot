@@ -20,10 +20,10 @@ class MediMindPDF(FPDF):
     def add_unicode_font(self):
         """Add Unicode font for Hindi text"""
         try:
-            # Try to use DejaVu Sans (supports Hindi)
+            # Try to use Noto Sans Devanagari (best Hindi support)
             font_path = self.get_font_path()
             if font_path:
-                self.add_font('DejaVu', '', font_path)
+                self.add_font('HindiFont', '', font_path)
                 self.hindi_font_available = True
             else:
                 self.hindi_font_available = False
@@ -32,34 +32,33 @@ class MediMindPDF(FPDF):
             self.hindi_font_available = False
     
     def get_font_path(self):
-        """Get path to DejaVu Sans font"""
-        # Common font locations
-        possible_paths = [
-            'C:/Windows/Fonts/DejaVuSans.ttf',  # Windows
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  # Linux
-            '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',  # Mac
-            'fonts/DejaVuSans.ttf',  # Local folder
+        """Get path to font with Hindi support"""
+        # Try Noto Sans Devanagari (best Hindi support)
+        noto_paths = [
+            'C:/Windows/Fonts/NotoSansDevanagari-Regular.ttf',
+            'fonts/NotoSansDevanagari-Regular.ttf',
         ]
         
-        for path in possible_paths:
+        for path in noto_paths:
             if os.path.exists(path):
                 return path
         
-        # Try to download if not found
-        try:
-            os.makedirs('fonts', exist_ok=True)
-            # Use a working download URL
-            font_url = 'https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.zip'
-            local_path = 'fonts/DejaVuSans.ttf'
-            
-            # For now, just return None if not found locally
-            # User can manually download the font
-            print("DejaVu Sans font not found. Hindi will show as placeholder.")
-            print("To enable Hindi: Download DejaVu Sans font to fonts/ folder")
-            return None
-        except Exception as e:
-            print(f"Could not setup font: {e}")
-            return None
+        # Fallback to DejaVu Sans
+        dejavu_paths = [
+            'C:/Windows/Fonts/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
+            'fonts/DejaVuSans.ttf',
+        ]
+        
+        for path in dejavu_paths:
+            if os.path.exists(path):
+                return path
+        
+        # Font not found
+        print("Hindi font not found. Hindi will show as placeholder.")
+        print("To enable Hindi: Run python download_hindi_font.py")
+        return None
     
     def header(self):
         """Add header to each page"""
@@ -226,7 +225,7 @@ Important: If symptoms worsen or you experience difficulty breathing, chest pain
         if pdf.hindi_font_available:
             pdf.set_font('Arial', 'B', 10)
             pdf.cell(0, 6, 'Hindi:', 0, 1)
-            pdf.set_font('DejaVu', '', 10)
+            pdf.set_font('HindiFont', '', 10)
             
             # Limit Hindi text
             if len(hindi_report) > 600:
