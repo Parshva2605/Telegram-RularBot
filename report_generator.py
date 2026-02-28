@@ -33,31 +33,30 @@ class MediMindPDF(FPDF):
     
     def get_font_path(self):
         """Get path to font with Hindi support"""
-        # Try Noto Sans Devanagari (best Hindi support)
+        # Try Mangal (Windows Hindi font - works best with fpdf2)
+        mangal_paths = [
+            'C:/Windows/Fonts/mangal.ttf',
+            'fonts/mangal.ttf',
+        ]
+        
+        for path in mangal_paths:
+            if os.path.exists(path):
+                print(f"Using Hindi font: {path}")
+                return path
+        
+        # Try Noto Sans Devanagari (static version)
         noto_paths = [
-            'C:/Windows/Fonts/NotoSansDevanagari-Regular.ttf',
             'fonts/NotoSansDevanagari-Regular.ttf',
+            'C:/Windows/Fonts/NotoSansDevanagari-Regular.ttf',
         ]
         
         for path in noto_paths:
             if os.path.exists(path):
-                return path
-        
-        # Fallback to DejaVu Sans
-        dejavu_paths = [
-            'C:/Windows/Fonts/DejaVuSans.ttf',
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-            '/System/Library/Fonts/Supplemental/DejaVuSans.ttf',
-            'fonts/DejaVuSans.ttf',
-        ]
-        
-        for path in dejavu_paths:
-            if os.path.exists(path):
+                print(f"Using Hindi font: {path}")
                 return path
         
         # Font not found
-        print("Hindi font not found. Hindi will show as placeholder.")
-        print("To enable Hindi: Run python download_hindi_font.py")
+        print("Hindi font not found. Run: python download_hindi_font.py")
         return None
     
     def header(self):
