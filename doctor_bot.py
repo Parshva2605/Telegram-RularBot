@@ -354,6 +354,7 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     contact = update.message.contact
     
+    # Verify it's the user's own phone number
     if contact.user_id != user.id:
         await update.message.reply_text(
             "❌ Please share YOUR own phone number, not someone else's.",
@@ -365,13 +366,18 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not phone.startswith('+'):
         phone = f"+{phone}"
     
+    # Verify phone number with Telegram
+    # Telegram automatically verifies the phone when user shares contact
+    # The contact.user_id matching user.id confirms it's their verified number
+    
     context.user_data['phone'] = phone
+    context.user_data['telegram_verified'] = True  # Mark as Telegram-verified
     context.user_data['step'] = 'waiting_doctor_name'
     context.user_data['doctor_form'] = {}  # Initialize form
     
     await update.message.reply_text(
-        f"✅ Phone verified: {phone}\n\n"
-        f"👨‍⚕️ Enter your full name:\n\n"
+        f"✅ Phone verified via Telegram: {phone}\n\n"
+        f"👨‍⚕️ **Step 1/3:** Enter your full name:\n\n"
         f"Example: Dr. Rajesh Shah",
         reply_markup=ReplyKeyboardRemove()
     )
@@ -391,8 +397,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['doctor_form']['name'] = text
         context.user_data['step'] = 'waiting_doctor_mci'
         await update.message.reply_text(
-            "🩺 Enter your MCI Registration Number:\n\n"
-            "Example: GJMC12345"
+            f"✅ Name saved: {text}\n\n"
+            f"🩺 **Step 2/3:** Enter your MCI Registration Number:\n\n"
+            f"Example: GJMC12345"
         )
     
     elif step == 'waiting_doctor_mci':
@@ -400,8 +407,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['doctor_form']['mci'] = text
         context.user_data['step'] = 'waiting_doctor_phc'
         await update.message.reply_text(
-            "🏥 Enter your PHC (Primary Health Center) name:\n\n"
-            "Example: Anklav PHC"
+            f"✅ MCI saved: {text}\n\n"
+            f"🏥 **Step 3/3:** Enter your PHC (Primary Health Center) name:\n\n"
+            f"Example: Anklav PHC"
         )
     
     elif step == 'waiting_doctor_phc':
@@ -434,9 +442,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data['phone'] = phone
             
             # Success message
+            telegram_verified = context.user_data.get('telegram_verified', False)
+            verification_text = "📱 Phone verified via Telegram ✅\n" if telegram_verified else ""
+            
             await update.message.reply_text(
                 f"✅ **REGISTRATION SUCCESSFUL**\n\n"
+                f"{verification_text}"
                 f"👨‍⚕️ {form['name']}\n"
+                f"📱 {phone}\n"
                 f"🩺 MCI: {form['mci']}\n"
                 f"🏥 PHC: {form['phc']}\n\n"
                 f"🔐 **Access Code:** `{access_code}`\n\n"
@@ -618,7 +631,8 @@ async def show_main_menu(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📋 My Queue", callback_data="queue")],
         [InlineKeyboardButton("🩻 Analyze Image", callback_data="analyze")],
         [InlineKeyboardButton("📋 Old Reports", callback_data="old_reports")],
-        [InlineKeyboardButton("🔐 Regen Code", callback_data="regen_code_btn")]
+        [InlineKeyboardButton("🔐 Regen Code", callback_data="regen_code_btn")],
+        [InlineKeyboardButton("🚪 Logout", callback_data="logout")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -779,6 +793,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         elif query.data == "back_menu":
             await show_main_menu(query.message.chat_id, context)
+        
+        elif query.data == "logout":
+            # Logout - clear session
+            context.user_data.clear()
+            
+            await query.edit_message_text(
+                "👋 **LOGGED OUT**\n\n"
+                "You have been logged out successfully.\n\n"
+                "Use /start to login again.",
+                parse_mode='Markdown'
+            )
+            logger.info(f"Doctor {user.id} logged out")
         
         else:
             await query.edit_message_text("❓ Unknown option")
