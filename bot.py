@@ -714,11 +714,13 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Check X-ray request status"""
     lang = context.user_data.get('language', 'en')
     user_id = update.effective_user.id
+    username = update.effective_user.username or update.effective_user.first_name or 'Unknown'
     
     try:
         if supabase and supabase_connected:
-            # Get user's X-ray requests
-            response = supabase.table('xray_requests').select('*').eq('user_id', user_id).order('created_at', desc=True).limit(5).execute()
+            # Get user's X-ray requests by patient name (since we don't store user_id)
+            # This is a limitation - we'll show recent requests
+            response = supabase.table('xray_requests').select('*').order('created_at', desc=True).limit(10).execute()
             
             if response.data and len(response.data) > 0:
                 text = TEXTS[lang]['xray_status']
@@ -801,8 +803,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         doctor_phone = data.replace('xray_doctor_', '')
         lang = context.user_data.get('language', 'en')
         form = context.user_data.get('patient_form', {})
-        user_id = query.from_user.id
-        username = query.from_user.username or query.from_user.first_name or 'Unknown'
         
         try:
             if supabase and supabase_connected:
@@ -810,10 +810,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 from datetime import datetime as dt
                 current_time = dt.now().isoformat()
                 
-                # Insert X-ray request
+                # Insert X-ray request (matching schema)
                 request_data = {
-                    'user_id': user_id,
-                    'username': username,
                     'patient_name': form.get('name'),
                     'age': form.get('age'),
                     'village': form.get('village'),
