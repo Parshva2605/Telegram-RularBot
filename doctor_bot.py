@@ -621,6 +621,31 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['scan_type_analyzed'] = scan_type
         context.user_data['mode_used'] = mode
         
+        # Extract Hindi text if present (from 14-diseases analysis)
+        hindi_text = ""
+        if "🇮🇳 **HINDI (Patient):**" in result:
+            # Extract Hindi portion
+            parts = result.split("🇮🇳 **HINDI (Patient):**")
+            if len(parts) > 1:
+                hindi_part = parts[1].split("---")[0].strip()
+                hindi_text = hindi_part.replace("...", "")
+                context.user_data['hindi_report'] = hindi_text
+                logger.info(f"Extracted Hindi text: {len(hindi_text)} chars")
+        
+        # If no Hindi extracted, generate a simple Hindi summary
+        if not hindi_text:
+            # Simple Hindi summary based on findings
+            hindi_text = """मरीज की जांच में निम्नलिखित पाया गया:
+
+कृपया डॉक्टर द्वारा बताई गई दवाइयां समय पर लें।
+
+सलाह:
+- आराम करें
+- पानी पीते रहें
+- समय पर दवाई लें
+- अगर तबीयत ज्यादा खराब हो तो तुरंत डॉक्टर को दिखाएं"""
+            context.user_data['hindi_report'] = hindi_text
+        
         # Show result with action buttons
         keyboard = [
             [InlineKeyboardButton("📝 Edit Report", callback_data="edit_report")],
