@@ -1027,8 +1027,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ).eq("doctor_phone", phone).eq("status", "pending").order("created_at", desc=True).limit(10).execute()
             
             if requests.data and len(requests.data) > 0:
-                await query.edit_message_text(
-                    f"📥 **NEW REQUESTS**\n\nYou have {len(requests.data)} pending X-ray request(s).\n\nShowing details...",
+                # Send new message instead of editing (original might be a photo)
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"📥 **NEW REQUESTS**\n\nYou have {len(requests.data)} pending X-ray request(s).\n\nShowing details...",
                     parse_mode='Markdown'
                 )
                 
