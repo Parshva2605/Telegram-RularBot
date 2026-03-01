@@ -1396,22 +1396,33 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logger.error(f"Error updating request: {e}")
                 
-                # Show success message with Contact Patient button
+                # Send PDF directly to doctor
+                try:
+                    with open(pdf_path, 'rb') as pdf_file:
+                        await context.bot.send_document(
+                            chat_id=query.message.chat_id,
+                            document=pdf_file,
+                            filename=pdf_filename,
+                            caption=f"📄 *Report for {patient_name}*\n\nGenerated: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+                            parse_mode='Markdown'
+                        )
+                    logger.info(f"PDF sent to doctor: {pdf_filename}")
+                except Exception as e:
+                    logger.error(f"Error sending PDF: {e}")
+                
+                # Show success message with only 2 buttons
                 keyboard = [
                     [InlineKeyboardButton("📞 Contact Patient", callback_data=f"contact_patient_{request_id}")],
-                    [InlineKeyboardButton("📥 Download Report", callback_data=f"download_report_{request_id}")],
                     [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
                 ]
                 
                 # Escape special characters for Markdown
-                safe_filename = pdf_filename.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
                 safe_patient_name = patient_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
                 
                 await query.edit_message_text(
-                    f"✅ *REPORT GENERATED SUCCESSFULLY*\n\n"
+                    f"✅ *REPORT GENERATED & SENT*\n\n"
                     f"👤 Patient: {safe_patient_name}\n"
-                    f"📄 Report saved to system\n"
-                    f"💾 File: `{safe_filename}`\n\n"
+                    f"📄 PDF report sent above\n\n"
                     f"📋 *Status*: Request marked as reviewed\n\n"
                     f"🔒 *Privacy*: Report NOT sent to patient (medical compliance)\n\n"
                     f"👉 Click 'Contact Patient' to communicate with patient",

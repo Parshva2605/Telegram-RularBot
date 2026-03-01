@@ -14,6 +14,9 @@ from datetime import datetime
 
 load_dotenv()
 
+# Load doctor bot token for sending notifications
+DOCTOR_BOT_TOKEN = os.getenv('MEDIMIND_DOCTOR_TOKEN')
+
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -836,29 +839,43 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     # Notify doctor with image from local file
                     if doctor_telegram_id:
                         try:
-                            # Send image from local file path
+                            # Send notification via DOCTOR bot (not patient bot)
                             image_path = form.get('image_path')
                             if image_path and os.path.exists(image_path):
+                                # Send photo via doctor bot
                                 with open(image_path, 'rb') as photo_file:
-                                    await context.bot.send_photo(
-                                        chat_id=doctor_telegram_id,
-                                        photo=photo_file,
-                                        caption=f"🩻 **NEW X-RAY REQUEST** (ID: {request_id})\n\n"
-                                                f"👤 {form['name']} ({form['age']}y)\n"
-                                                f"📍 {form['village']}\n"
-                                                f"🩺 {form['symptoms']}\n\n"
-                                                f"📥 Click 'Requests' button in @MediMindDoctorBot to analyze",
-                                        parse_mode='Markdown'
+                                    files = {'photo': photo_file}
+                                    data = {
+                                        'chat_id': doctor_telegram_id,
+                                        'caption': f"🩻 **NEW X-RAY REQUEST** (ID: {request_id})\n\n"
+                                                  f"👤 {form['name']} ({form['age']}y)\n"
+                                                  f"📍 {form['village']}\n"
+                                                  f"🩺 {form['symptoms']}\n\n"
+                                                  f"📥 Click 'Requests' button to analyze",
+                                        'parse_mode': 'Markdown'
+                                    }
+                                    response = requests.post(
+                                        f"https://api.telegram.org/bot{DOCTOR_BOT_TOKEN}/sendPhoto",
+                                        data=data,
+                                        files=files
                                     )
+                                    if response.status_code == 200:
+                                        logger.info(f"Notification sent to doctor {doctor_telegram_id} via @MediMindDoctorBot")
+                                    else:
+                                        logger.error(f"Failed to send notification: {response.text}")
                             else:
                                 # Fallback if no image
-                                await context.bot.send_message(
-                                    chat_id=doctor_telegram_id,
-                                    text=f"🩻 NEW X-RAY REQUEST (ID: {request_id})\n\n"
-                                         f"👤 {form['name']} ({form['age']}y)\n"
-                                         f"📍 {form['village']}\n"
-                                         f"🩺 {form['symptoms']}\n\n"
-                                         f"📋 Check 'Requests' button in @MediMindDoctorBot"
+                                response = requests.post(
+                                    f"https://api.telegram.org/bot{DOCTOR_BOT_TOKEN}/sendMessage",
+                                    json={
+                                        'chat_id': doctor_telegram_id,
+                                        'text': f"🩻 NEW X-RAY REQUEST (ID: {request_id})\n\n"
+                                               f"👤 {form['name']} ({form['age']}y)\n"
+                                               f"📍 {form['village']}\n"
+                                               f"🩺 {form['symptoms']}\n\n"
+                                               f"📋 Check 'Requests' button to analyze",
+                                        'parse_mode': 'Markdown'
+                                    }
                                 )
                         except Exception as e:
                             logger.error(f"Failed to notify doctor: {e}")
