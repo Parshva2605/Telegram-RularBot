@@ -1384,13 +1384,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
                 ]
                 
+                # Escape special characters for Markdown
+                safe_filename = pdf_filename.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
+                safe_patient_name = patient_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
+                
                 await query.edit_message_text(
-                    f"✅ **REPORT GENERATED SUCCESSFULLY**\n\n"
-                    f"👤 Patient: {patient_name}\n"
+                    f"✅ *REPORT GENERATED SUCCESSFULLY*\n\n"
+                    f"👤 Patient: {safe_patient_name}\n"
                     f"📄 Report saved to system\n"
-                    f"💾 File: {pdf_filename}\n\n"
-                    f"📋 **Status**: Request marked as reviewed\n\n"
-                    f"🔒 **Privacy**: Report NOT sent to patient (medical compliance)\n\n"
+                    f"💾 File: `{safe_filename}`\n\n"
+                    f"📋 *Status*: Request marked as reviewed\n\n"
+                    f"🔒 *Privacy*: Report NOT sent to patient (medical compliance)\n\n"
                     f"👉 Click 'Contact Patient' to communicate with patient",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode='Markdown'
@@ -1411,8 +1415,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             except Exception as e:
                 logger.error(f"Error generating PDF: {e}")
+                # Escape special characters in error message
+                error_msg = str(e).replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]').replace('`', '\\`')
                 await query.edit_message_text(
-                    f"❌ Error generating PDF: {str(e)}\n\n"
+                    f"❌ *Error generating PDF*\n\n"
+                    f"Error: {error_msg}\n\n"
                     f"Please try again or contact admin.",
                     parse_mode='Markdown'
                 )
