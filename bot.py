@@ -5,6 +5,7 @@ import requests
 import schedule
 import threading
 import time
+import json
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -841,8 +842,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         try:
                             # Send notification via DOCTOR bot (not patient bot)
                             image_path = form.get('image_path')
+                            
+                            # Create inline keyboard with buttons
+                            keyboard = {
+                                'inline_keyboard': [
+                                    [{'text': '📥 Requests', 'callback_data': 'requests'}],
+                                    [{'text': '🔙 Main Menu', 'callback_data': 'back_menu'}]
+                                ]
+                            }
+                            
                             if image_path and os.path.exists(image_path):
-                                # Send photo via doctor bot
+                                # Send photo via doctor bot with buttons
                                 with open(image_path, 'rb') as photo_file:
                                     files = {'photo': photo_file}
                                     data = {
@@ -851,8 +861,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                                                   f"👤 {form['name']} ({form['age']}y)\n"
                                                   f"📍 {form['village']}\n"
                                                   f"🩺 {form['symptoms']}\n\n"
-                                                  f"📥 Click 'Requests' button to analyze",
-                                        'parse_mode': 'Markdown'
+                                                  f"📥 Click 'Requests' button below to analyze",
+                                        'parse_mode': 'Markdown',
+                                        'reply_markup': json.dumps(keyboard)
                                     }
                                     response = requests.post(
                                         f"https://api.telegram.org/bot{DOCTOR_BOT_TOKEN}/sendPhoto",
@@ -873,8 +884,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                                                f"👤 {form['name']} ({form['age']}y)\n"
                                                f"📍 {form['village']}\n"
                                                f"🩺 {form['symptoms']}\n\n"
-                                               f"📋 Check 'Requests' button to analyze",
-                                        'parse_mode': 'Markdown'
+                                               f"📋 Click 'Requests' button below to analyze",
+                                        'parse_mode': 'Markdown',
+                                        'reply_markup': keyboard
                                     }
                                 )
                         except Exception as e:

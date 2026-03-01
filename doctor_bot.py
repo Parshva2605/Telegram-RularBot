@@ -805,20 +805,28 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         doctors = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
         doctor_name = doctors.data[0].get('name', 'Doctor') if doctors.data else 'Doctor'
         
-        # Forward voice note to patient
+        # Get voice file from doctor bot
         voice = update.message.voice
         
-        # Send voice via PATIENT bot (not doctor bot)
-        import requests
+        # Download voice file from doctor bot
+        voice_file = await context.bot.get_file(voice.file_id)
+        voice_bytes = await voice_file.download_as_bytearray()
+        
+        # Send voice via PATIENT bot by uploading the file
+        files = {
+            'voice': ('voice.ogg', voice_bytes, 'audio/ogg')
+        }
+        data = {
+            'chat_id': patient_telegram_id,
+            'caption': f"🎤 **Voice Message from Dr. {doctor_name}**\n\n"
+                      f"🏥 Please listen to your doctor's message",
+            'parse_mode': 'Markdown'
+        }
+        
         response = requests.post(
             f"https://api.telegram.org/bot{PATIENT_BOT_TOKEN}/sendVoice",
-            json={
-                "chat_id": patient_telegram_id,
-                "voice": voice.file_id,
-                "caption": f"🎤 **Voice Message from Dr. {doctor_name}**\n\n"
-                          f"🏥 Please listen to your doctor's message",
-                "parse_mode": "Markdown"
-            }
+            data=data,
+            files=files
         )
         
         if response.status_code != 200:
@@ -1396,6 +1404,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as e:
                         logger.error(f"Error updating request: {e}")
                 
+                # First, update the current message to show processing
+                await query.edit_message_text(
+                    "⏳ Sending PDF report...\n"
+                    "Please wait...",
+                    parse_mode='Markdown'
+                )
+                
                 # Send PDF directly to doctor
                 try:
                     with open(pdf_path, 'rb') as pdf_file:
@@ -1410,7 +1425,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Error sending PDF: {e}")
                 
-                # Show success message with only 2 buttons
+                # Send buttons AFTER the PDF as a new message
                 keyboard = [
                     [InlineKeyboardButton("📞 Contact Patient", callback_data=f"contact_patient_{request_id}")],
                     [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
@@ -1419,13 +1434,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Escape special characters for Markdown
                 safe_patient_name = patient_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
                 
-                await query.edit_message_text(
-                    f"✅ *REPORT GENERATED & SENT*\n\n"
-                    f"👤 Patient: {safe_patient_name}\n"
-                    f"📄 PDF report sent above\n\n"
-                    f"📋 *Status*: Request marked as reviewed\n\n"
-                    f"🔒 *Privacy*: Report NOT sent to patient (medical compliance)\n\n"
-                    f"👉 Click 'Contact Patient' to communicate with patient",
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"✅ *REPORT GENERATED SUCCESSFULLY*\n\n"
+                         f"👤 Patient: {safe_patient_name}\n"
+                         f"📄 PDF report sent above\n\n"
+                         f"📋 *Status*: Request marked as reviewed\n\n"
+                         f"🔒 *Privacy*: Report NOT sent to patient (medical compliance)\n\n"
+                         f"👉 Choose an action below:",
                     reply_markup=InlineKeyboardMarkup(keyboard),
                     parse_mode='Markdown'
                 )
