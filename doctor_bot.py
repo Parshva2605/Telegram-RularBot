@@ -11,6 +11,7 @@ import logging
 import secrets
 import json
 import base64
+import requests  # For sending messages via patient bot
 from PIL import Image
 import io
 import ollama
@@ -29,10 +30,14 @@ from report_generator import generate_pdf, generate_and_upload
 # Load environment variables
 load_dotenv('.env.doctor')
 
+# Also load patient bot token from main .env
+load_dotenv('.env')
+
 # Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 MEDIMIND_DOCTOR_TOKEN = os.getenv("MEDIMIND_DOCTOR_TOKEN")
+PATIENT_BOT_TOKEN = os.getenv("BOT_TOKEN")  # Patient bot token for sending messages
 ADMIN_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 
 # Debug: Print loaded values
@@ -40,6 +45,7 @@ print("=== DOCTOR BOT CONFIG DEBUG ===")
 print(f"SUPABASE_URL: {SUPABASE_URL}")
 print(f"SUPABASE_KEY: {SUPABASE_KEY[:30] if SUPABASE_KEY else 'NOT SET'}...")
 print(f"DOCTOR_TOKEN: {MEDIMIND_DOCTOR_TOKEN[:20] if MEDIMIND_DOCTOR_TOKEN else 'NOT SET'}...")
+print(f"PATIENT_TOKEN: {PATIENT_BOT_TOKEN[:20] if PATIENT_BOT_TOKEN else 'NOT SET'}...")
 print("================================\n")
 
 # Initialize Supabase with error handling
@@ -613,11 +619,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🏥 Please follow your doctor's instructions"
             )
             
-            await context.bot.send_message(
-                chat_id=patient_telegram_id,
-                text=message_to_patient,
-                parse_mode='Markdown'
+            # Send via PATIENT bot (not doctor bot)
+            import requests
+            response = requests.post(
+                f"https://api.telegram.org/bot{PATIENT_BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": patient_telegram_id,
+                    "text": message_to_patient,
+                    "parse_mode": "Markdown"
+                }
             )
+            
+            if response.status_code != 200:
+                raise Exception(f"Failed to send message: {response.text}")
             
             # Confirm to doctor
             await update.message.reply_text(
@@ -625,12 +639,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"👤 To: {patient_name}\n\n"
                 f"**Your message (English):**\n{text}\n\n"
                 f"**Translation (Hindi):**\n{hindi_translation}\n\n"
-                f"📱 Both versions sent to patient",
+                f"📱 Both versions sent to patient via @MediMindRuralBot",
                 parse_mode='Markdown'
             )
             
-            # Show main menu
-            await asyncio.sleep(2)
+            # Show main menu immediately (don't wait)
             await show_main_menu(update.message.chat_id, context)
             
             logger.info(f"Text message sent from doctor {user.id} to patient {patient_telegram_id}")
@@ -795,25 +808,31 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Forward voice note to patient
         voice = update.message.voice
         
-        # Send voice with caption
-        await context.bot.send_voice(
-            chat_id=patient_telegram_id,
-            voice=voice.file_id,
-            caption=f"🎤 **Voice Message from Dr. {doctor_name}**\n\n"
-                    f"🏥 Please listen to your doctor's message",
-            parse_mode='Markdown'
+        # Send voice via PATIENT bot (not doctor bot)
+        import requests
+        response = requests.post(
+            f"https://api.telegram.org/bot{PATIENT_BOT_TOKEN}/sendVoice",
+            json={
+                "chat_id": patient_telegram_id,
+                "voice": voice.file_id,
+                "caption": f"🎤 **Voice Message from Dr. {doctor_name}**\n\n"
+                          f"🏥 Please listen to your doctor's message",
+                "parse_mode": "Markdown"
+            }
         )
+        
+        if response.status_code != 200:
+            raise Exception(f"Failed to send voice: {response.text}")
         
         # Confirm to doctor
         await update.message.reply_text(
             f"✅ **VOICE NOTE SENT**\n\n"
             f"👤 To: {patient_name}\n"
-            f"🎤 Voice message delivered successfully",
+            f"🎤 Voice message delivered successfully via @MediMindRuralBot",
             parse_mode='Markdown'
         )
         
-        # Show main menu
-        await asyncio.sleep(2)
+        # Show main menu immediately (don't wait)
         await show_main_menu(update.message.chat_id, context)
         
         logger.info(f"Voice note sent from doctor {user.id} to patient {patient_telegram_id}")
@@ -1404,14 +1423,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.user_data['last_report_path'] = pdf_path
                 
                 # DON'T clear context yet - needed for contact patient
-                # Keep: current_request_id, patient_name, patient_age, patient_village, patient_telegram_id
+                # Keep: current_request_id, patient_name, patient_telegram_id
                 context.user_data.pop('patient_age', None)
                 context.user_data.pop('patient_village', None)
                 context.user_data.pop('patient_symptoms', None)
                 
-                # Show main menu
-                await asyncio.sleep(1)
-                await show_main_menu(query.message.chat_id, context)
+                # Main menu will be shown when user clicks a button
+                # No need to show it automatically here
                 
             except Exception as e:
                 logger.error(f"Error generating PDF: {e}")
