@@ -1277,7 +1277,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         text += f"   🏥 {apt.get('doctor_phc', 'PHC')}\n"
                         text += f"   📝 {apt['reason']}\n\n"
                     
-                    await query.edit_message_text(text, reply_markup=get_visit_keyboard(lang), parse_mode='Markdown')
+                    await query.edit_message_text(text, reply_markup=get_visit_keyboard(lang))
                 else:
                     no_apt_text = '📭 No upcoming appointments.' if lang == 'en' else '📭 कोई आगामी अपॉइंटमेंट नहीं।' if lang == 'hi' else '📭 કોઈ આગામી એપોઇન્ટમેન્ટ નથી.'
                     await query.edit_message_text(no_apt_text, reply_markup=get_visit_keyboard(lang))
