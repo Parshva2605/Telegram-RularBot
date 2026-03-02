@@ -73,7 +73,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================
-# REAL OLLAMA VLM FUNCTIONS (RTX 3070)
+# REAL OLLAMA VLM FUNCTIONS
 # ============================================
 
 def prepare_image_b64(image_path):
@@ -678,7 +678,7 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(
         f"⏳ Processing {scan_type} image with Ollama VLM...\n"
-        f"Please wait (RTX 3070 inference)..."
+        f"Please wait..."
     )
     
     try:
@@ -868,7 +868,7 @@ async def process_request_analysis(query, context):
         
         await query.edit_message_text(
             "⏳ Loading image and analyzing...\n"
-            "Please wait (RTX 3070 inference)...",
+            "Please wait...",
             parse_mode='Markdown'
         )
         
@@ -1209,7 +1209,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         [InlineKeyboardButton("🔙 Back", callback_data="requests")]
                     ]
                     await query.edit_message_text(
-                        "⚙️ **X-RAY MODE** (RTX 3070):\n\nSelect analysis mode:",
+                        "⚙️ **X-RAY MODE**:\n\nSelect analysis mode:",
                         reply_markup=InlineKeyboardMarkup(keyboard),
                         parse_mode='Markdown'
                     )
@@ -1263,7 +1263,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🔙 Back", callback_data="analyze")]
             ]
             await query.edit_message_text(
-                "⚙️ **X-RAY MODE** (RTX 3070):\n\nSelect analysis mode:",
+                "⚙️ **X-RAY MODE**:\n\nSelect analysis mode:",
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode='Markdown'
             )
