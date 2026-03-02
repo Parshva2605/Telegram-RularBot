@@ -1349,6 +1349,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 from datetime import datetime
                 date_obj = datetime.strptime(apt['appointment_date'], '%Y-%m-%d')
                 display_date = date_obj.strftime('%d %B %Y')
+                day_name = date_obj.strftime('%A')
                 
                 success_text = f"✅ Appointment Cancelled\n\n📅 Date: {display_date}\n👨‍⚕️ Dr. {apt['doctor_name']}"
                 if lang == 'hi':
@@ -1358,7 +1359,42 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 
                 await query.edit_message_text(success_text, reply_markup=get_visit_keyboard(lang))
                 
-                # TODO: Notify doctor about cancellation (will implement in Phase 2)
+                # Notify doctor about cancellation
+                try:
+                    doctor_response = supabase.table('doctors').select('telegram_id').eq('phone', apt['doctor_phone']).execute()
+                    if doctor_response.data and len(doctor_response.data) > 0:
+                        doctor_telegram_id = doctor_response.data[0].get('telegram_id')
+                        
+                        if doctor_telegram_id:
+                            import requests
+                            DOCTOR_BOT_TOKEN = os.getenv('MEDIMIND_DOCTOR_TOKEN')
+                            
+                            notification_text = (
+                                f"❌ **APPOINTMENT CANCELLED**\n\n"
+                                f"👤 Patient: {apt['patient_name']}\n"
+                                f"📅 Date: {display_date} ({day_name})\n"
+                                f"📝 Reason: {apt.get('reason', 'Not specified')}\n\n"
+                                f"🔔 Patient cancelled this appointment."
+                            )
+                            
+                            keyboard = {
+                                "inline_keyboard": [
+                                    [{"text": "📅 Appointments", "callback_data": "appointments"}],
+                                    [{"text": "🔙 Main Menu", "callback_data": "back_menu"}]
+                                ]
+                            }
+                            
+                            requests.post(
+                                f"https://api.telegram.org/bot{DOCTOR_BOT_TOKEN}/sendMessage",
+                                json={
+                                    "chat_id": doctor_telegram_id,
+                                    "text": notification_text,
+                                    "parse_mode": "Markdown",
+                                    "reply_markup": keyboard
+                                }
+                            )
+                except Exception as e:
+                    logger.error(f"Failed to notify doctor about cancellation: {e}")
             else:
                 error_text = '❌ Appointment not found.' if lang == 'en' else '❌ अपॉइंटमेंट नहीं मिला।' if lang == 'hi' else '❌ એપોઇન્ટમેન્ટ મળી નથી.'
                 await query.edit_message_text(error_text, reply_markup=get_visit_keyboard(lang))
@@ -1668,6 +1704,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     from datetime import datetime
                     date_obj = datetime.strptime(appointment_date, '%Y-%m-%d')
                     display_date = date_obj.strftime('%d %B %Y')
+                    day_name = date_obj.strftime('%A')
                     
                     # Success message
                     success_text = f"✅ Appointment Booked!\n\n👨‍⚕️ Doctor: Dr. {doctor_name}\n🏥 PHC: {doctor_phc}\n📅 Date: {display_date}\n📝 Reason: {reason}\n\n🔔 You will be reminded 1 day before."
@@ -1678,7 +1715,51 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     
                     await update.message.reply_text(success_text, reply_markup=get_visit_keyboard(lang))
                     
-                    # TODO: Send notification to doctor (will implement in Phase 2)
+                    # Send notification to doctor
+                    try:
+                        # Get doctor's telegram_id
+                        doctor_response = supabase.table('doctors').select('telegram_id').eq('phone', doctor_phone).execute()
+                        if doctor_response.data and len(doctor_response.data) > 0:
+                            doctor_telegram_id = doctor_response.data[0].get('telegram_id')
+                            
+                            if doctor_telegram_id:
+                                # Send notification via doctor bot
+                                import requests
+                                DOCTOR_BOT_TOKEN = os.getenv('MEDIMIND_DOCTOR_TOKEN')
+                                
+                                notification_text = (
+                                    f"🔔 **NEW APPOINTMENT**\n\n"
+                                    f"👤 Patient: {user_name}\n"
+                                )
+                                if patient_phone:
+                                    notification_text += f"📱 Phone: {patient_phone}\n"
+                                if patient_village:
+                                    notification_text += f"📍 Village: {patient_village}\n"
+                                notification_text += (
+                                    f"📅 Date: {display_date} ({day_name})\n"
+                                    f"📝 Reason: {reason}\n\n"
+                                    f"💡 Check all appointments in the menu."
+                                )
+                                
+                                # Create inline keyboard with Appointments button
+                                keyboard = {
+                                    "inline_keyboard": [
+                                        [{"text": "📅 Appointments", "callback_data": "appointments"}],
+                                        [{"text": "🔙 Main Menu", "callback_data": "back_menu"}]
+                                    ]
+                                }
+                                
+                                requests.post(
+                                    f"https://api.telegram.org/bot{DOCTOR_BOT_TOKEN}/sendMessage",
+                                    json={
+                                        "chat_id": doctor_telegram_id,
+                                        "text": notification_text,
+                                        "parse_mode": "Markdown",
+                                        "reply_markup": keyboard
+                                    }
+                                )
+                    except Exception as e:
+                        logger.error(f"Failed to notify doctor: {e}")
                     
                 else:
                     await update.message.reply_text(TEXTS[lang]['appointment_error'], reply_markup=get_main_menu_keyboard(lang))

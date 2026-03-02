@@ -9,12 +9,25 @@ load_dotenv('.env')
 
 supabase = create_client(os.getenv('SUPABASE_URL'), os.getenv('SUPABASE_KEY'))
 
-# Get all reviewed requests
-reviewed = supabase.table("xray_requests").select("id, patient_name, doctor_phone, status").eq("status", "reviewed").execute()
+# Get all requests grouped by status
+print("=== ALL REQUESTS BY STATUS ===\n")
 
-print(f"Total reviewed requests: {len(reviewed.data) if reviewed.data else 0}")
-print()
+for status in ['pending', 'reviewed', 'sent']:
+    requests = supabase.table("xray_requests").select("id, patient_name, doctor_phone, status").eq("status", status).execute()
+    
+    print(f"\n{status.upper()}: {len(requests.data) if requests.data else 0} requests")
+    
+    if requests.data:
+        # Group by doctor
+        by_doctor = {}
+        for r in requests.data:
+            doc = r.get('doctor_phone', 'N/A')
+            if doc not in by_doctor:
+                by_doctor[doc] = []
+            by_doctor[doc].append(r)
+        
+        for doc, reqs in by_doctor.items():
+            print(f"  {doc}: {len(reqs)} cases")
+            for r in reqs[:3]:  # Show first 3
+                print(f"    - ID {r['id']}: {r['patient_name']}")
 
-if reviewed.data:
-    for r in reviewed.data:
-        print(f"ID: {r['id']}, Patient: {r['patient_name']}, Doctor: {r.get('doctor_phone', 'N/A')}, Status: {r['status']}")

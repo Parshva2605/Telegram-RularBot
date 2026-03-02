@@ -66,13 +66,16 @@ def main():
             if reviewed_count != current_total:
                 # Update the doctor's total_cases
                 try:
-                    supabase.table("doctors").update({
+                    result = supabase.table("doctors").update({
                         "total_cases": reviewed_count
                     }).eq("phone", phone).execute()
                     
                     print(f"✅ Updated total_cases: {current_total} → {reviewed_count}")
+                    print(f"   Update result: {result.data if result else 'No result'}")
                 except Exception as e:
                     print(f"❌ Error updating: {e}")
+                    import traceback
+                    traceback.print_exc()
             else:
                 print(f"✅ Already up to date")
         

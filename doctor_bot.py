@@ -1017,6 +1017,7 @@ async def show_main_menu(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📥 Requests", callback_data="requests")],
         [InlineKeyboardButton("🩻 Analyze Image", callback_data="analyze")],
         [InlineKeyboardButton("📊 My Dashboard", callback_data="my_dashboard")],
+        [InlineKeyboardButton("📅 Appointments", callback_data="appointments")],
         [InlineKeyboardButton("📄 Reports", callback_data="reports")],
         [InlineKeyboardButton("🔐 Regen Code", callback_data="regen_code_btn")],
         [InlineKeyboardButton("🚪 Logout", callback_data="logout")]
@@ -1371,6 +1372,62 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
                 await query.edit_message_text(
                     "📭 No reports available yet.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+        
+        elif query.data == "appointments":
+            # Show doctor's scheduled appointments
+            from datetime import datetime
+            
+            appointments_response = supabase.table("appointments").select(
+                "id, patient_name, patient_phone, patient_village, appointment_date, reason, created_at"
+            ).eq("doctor_phone", phone).eq("status", "scheduled").order("appointment_date", desc=False).execute()
+            
+            if appointments_response.data and len(appointments_response.data) > 0:
+                appointments = appointments_response.data
+                
+                text = "📅 **YOUR APPOINTMENTS**\n\n"
+                text += f"Total: {len(appointments)} scheduled\n\n"
+                
+                for apt in appointments:
+                    # Format date
+                    apt_date = apt.get('appointment_date', 'N/A')
+                    if apt_date != 'N/A':
+                        try:
+                            date_obj = datetime.strptime(apt_date, '%Y-%m-%d')
+                            display_date = date_obj.strftime('%d %B %Y')
+                            day_name = date_obj.strftime('%A')
+                        except:
+                            display_date = apt_date
+                            day_name = ''
+                    else:
+                        display_date = 'N/A'
+                        day_name = ''
+                    
+                    text += f"📋 **Appointment #{apt['id']}**\n"
+                    text += f"👤 Patient: {apt['patient_name']}\n"
+                    if apt.get('patient_phone'):
+                        text += f"📱 Phone: {apt['patient_phone']}\n"
+                    if apt.get('patient_village'):
+                        text += f"📍 Village: {apt['patient_village']}\n"
+                    text += f"📅 Date: {display_date}"
+                    if day_name:
+                        text += f" ({day_name})"
+                    text += f"\n📝 Reason: {apt.get('reason', 'Not specified')}\n"
+                    text += f"🕐 Booked: {apt.get('created_at', 'N/A')[:10]}\n\n"
+                
+                text += "\n💡 To cancel an appointment, contact the patient directly."
+                
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+            else:
+                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
+                await query.edit_message_text(
+                    "📭 No scheduled appointments.\n\nPatients can book appointments through the patient bot.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
         
