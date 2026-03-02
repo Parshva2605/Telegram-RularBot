@@ -263,6 +263,9 @@ try:
                         st.markdown("**📄 Report PDF**")
                         pdf_path = request['report_pdf_url']
                         
+                        # Normalize path separators (handle both / and \)
+                        pdf_path = pdf_path.replace('\\', os.sep).replace('/', os.sep)
+                        
                         # Convert to absolute path from project root
                         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                         absolute_pdf_path = os.path.join(project_root, pdf_path)

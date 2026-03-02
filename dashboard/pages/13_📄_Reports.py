@@ -250,6 +250,9 @@ try:
                     # Download PDF button
                     pdf_path = report.get('report_pdf_url')
                     if pdf_path:
+                        # Normalize path separators (handle both / and \)
+                        pdf_path = pdf_path.replace('\\', os.sep).replace('/', os.sep)
+                        
                         # Convert to absolute path from project root
                         # Dashboard runs from dashboard/ folder, so go up one level
                         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
