@@ -150,37 +150,27 @@ Scan Date: {report_data.get('scan_date', datetime.now().strftime('%d/%m/%Y'))}""
     # AI Scan Results Section
     pdf.section_title('AI SCAN RESULTS', '📊')
     
-    diseases = report_data.get('diseases_detected', [])
-    if isinstance(diseases, list):
-        diseases_text = '\n'.join([f"• {d}" for d in diseases])
-    else:
-        diseases_text = str(diseases)
-    
-    if not diseases_text.strip():
-        diseases_text = "No significant findings detected"
-    
-    pdf.section_content(diseases_text)
-    
-    # Confidence Scores (if available)
-    confidence = report_data.get('confidence_scores', {})
-    if confidence:
-        pdf.set_font('Arial', 'I', 9)
-        if isinstance(confidence, dict):
-            conf_text = ', '.join([f"{k}: {v}" for k, v in confidence.items()])
-        else:
-            conf_text = str(confidence)
-        pdf.multi_cell(0, 5, f"Confidence: {conf_text}")
-        pdf.ln(3)
-    
-    # AI Clinical Analysis Section
-    pdf.section_title('AI CLINICAL ANALYSIS', '🔍')
-    
+    # Show the AI analysis here instead of diseases list
     ai_report = report_data.get('ai_report', 'No AI analysis available')
-    # Limit to 800 characters to fit on page
-    if len(ai_report) > 800:
-        ai_report = ai_report[:800] + "..."
     
+    # Clean up the AI report - remove unprofessional prefixes
+    ai_report = ai_report.replace('⚡ **FAST ANALYSIS:**', '').strip()
+    ai_report = ai_report.replace('**FAST ANALYSIS:**', '').strip()
+    ai_report = ai_report.replace('⚡', '').strip()
+    
+    # Remove markdown formatting for PDF
+    ai_report = ai_report.replace('**', '')
+    
+    # Show full AI analysis (no truncation)
     pdf.section_content(ai_report)
+    
+    # AI Clinical Analysis Section (Summary)
+    pdf.section_title('AI CLINICAL SUMMARY', '🔍')
+    
+    # Create a brief summary for this section
+    summary_text = "The detailed AI analysis is provided in the AI SCAN RESULTS section above. Please refer to the doctor's assessment below for clinical recommendations and treatment plan."
+    
+    pdf.section_content(summary_text)
     
     # Doctor's Assessment Section
     pdf.section_title('DOCTOR\'S ASSESSMENT', '👨‍⚕️')
