@@ -1253,9 +1253,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         try:
             if supabase and supabase_connected:
-                # Get patient's scheduled appointments
-                response = supabase.table('appointments').select('*').eq('patient_telegram_id', user_id).eq('status', 'scheduled').execute()
-                appointments = response.data if response.data else []
+                # Get patient's appointments (filter client-side for status)
+                response = supabase.table('appointments').select('*').eq('patient_telegram_id', user_id).execute()
+                all_appointments = response.data if response.data else []
+                
+                # Filter for scheduled appointments only
+                appointments = [apt for apt in all_appointments if apt.get('status') == 'scheduled']
                 
                 if appointments:
                     # Sort by date
@@ -1290,9 +1293,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         try:
             if supabase and supabase_connected:
-                # Get patient's scheduled appointments
-                response = supabase.table('appointments').select('*').eq('patient_telegram_id', user_id).eq('status', 'scheduled').execute()
-                appointments = response.data if response.data else []
+                # Get patient's appointments (filter client-side for status)
+                response = supabase.table('appointments').select('*').eq('patient_telegram_id', user_id).execute()
+                all_appointments = response.data if response.data else []
+                
+                # Filter for scheduled appointments only
+                appointments = [apt for apt in all_appointments if apt.get('status') == 'scheduled']
                 
                 if appointments:
                     # Sort by date
