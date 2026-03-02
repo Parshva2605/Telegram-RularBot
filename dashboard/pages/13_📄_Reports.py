@@ -268,8 +268,10 @@ try:
                                 
                                 # Extract filename from path
                                 pdf_filename = os.path.basename(pdf_path)
+                                file_size = len(pdf_data) / 1024  # KB
                                 
-                                col1, col2, col3 = st.columns([2, 1, 1])
+                                # Equal width columns for better UI
+                                col1, col2, col3 = st.columns(3)
                                 
                                 with col1:
                                     st.download_button(
@@ -281,13 +283,11 @@ try:
                                         use_container_width=True
                                     )
                                 
-                            with col2:
-                                st.info(f"📄 {pdf_filename}")
-                            
-                            with col3:
-                                # File size
-                                file_size = len(pdf_data) / 1024  # KB
-                                st.info(f"💾 {file_size:.1f} KB")
+                                with col2:
+                                    st.info(f"📄 {pdf_filename}")
+                                
+                                with col3:
+                                    st.info(f"💾 {file_size:.1f} KB")
                         else:
                             st.warning("⚠️ PDF file not found on server")
                             st.info(f"Expected path: {absolute_pdf_path}")
