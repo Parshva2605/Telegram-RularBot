@@ -661,12 +661,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             request_id = int(text.strip())
             
             try:
-                # Get report path from database
-                request = supabase.table("xray_requests").select("report_pdf_url, patient_name").eq("id", request_id).execute()
+                # Get report and patient details from database
+                request = supabase.table("xray_requests").select("*").eq("id", request_id).execute()
                 
                 if request.data and len(request.data) > 0:
-                    report_path = request.data[0].get('report_pdf_url')
-                    patient_name = request.data[0].get('patient_name')
+                    req_data = request.data[0]
+                    report_path = req_data.get('report_pdf_url')
+                    patient_name = req_data.get('patient_name')
+                    patient_telegram_id = req_data.get('patient_telegram_id')
                     
                     if report_path and os.path.exists(report_path):
                         # Send PDF to doctor
@@ -679,8 +681,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 caption=f"📄 Report for {patient_name} (ID: {request_id})"
                             )
                         
-                        # Show main menu
-                        await show_main_menu(update.message.chat_id, context)
+                        # Show contact button if patient has telegram ID
+                        if patient_telegram_id:
+                            keyboard = [
+                                [InlineKeyboardButton("💬 Contact Patient", callback_data=f"contact_patient_{request_id}")],
+                                [InlineKeyboardButton("🔙 Main Menu", callback_data="back_menu")]
+                            ]
+                            await update.message.reply_text(
+                                f"✅ Report sent!\n\n"
+                                f"👤 Patient: {patient_name}\n"
+                                f"🆔 Request ID: {request_id}\n\n"
+                                f"Would you like to contact the patient?",
+                                reply_markup=InlineKeyboardMarkup(keyboard),
+                                parse_mode='Markdown'
+                            )
+                        else:
+                            # No telegram ID - just show main menu
+                            await update.message.reply_text(
+                                f"✅ Report sent!\n\n"
+                                f"⚠️ Patient contact not available (no Telegram ID)",
+                                parse_mode='Markdown'
+                            )
+                            await show_main_menu(update.message.chat_id, context)
                     else:
                         await update.message.reply_text(
                             f"❌ Report file not found for ID: {request_id}\n\n"
