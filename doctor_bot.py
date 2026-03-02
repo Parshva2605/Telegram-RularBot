@@ -1307,15 +1307,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         elif query.data == "reports":
             # Show ALL patients with available reports (not just this doctor's)
-            reviewed = supabase.table("xray_requests").select(
-                "id, patient_name, age, reviewed_at, doctor_phone"
-            ).eq("status", "reviewed").not_.is_("report_pdf_url", "null").order("reviewed_at", desc=True).limit(50).execute()
+            # Get all reviewed requests and filter client-side for report_pdf_url
+            all_reviewed = supabase.table("xray_requests").select(
+                "id, patient_name, age, reviewed_at, doctor_phone, report_pdf_url"
+            ).eq("status", "reviewed").order("reviewed_at", desc=True).limit(100).execute()
             
-            if reviewed.data and len(reviewed.data) > 0:
-                text = "📄 **AVAILABLE REPORTS**\n\n"
-                text += f"Total: {len(reviewed.data)} reports\n\n"
+            # Filter for only requests with reports (client-side filtering)
+            reviewed_data = [r for r in all_reviewed.data if r.get('report_pdf_url')] if all_reviewed.data else []
+            
+            if reviewed_data and len(reviewed_data) > 0:
+                # Limit to 50 most recent
+                reviewed_data = reviewed_data[:50]
                 
-                for r in reviewed.data:
+                text = "📄 **AVAILABLE REPORTS**\n\n"
+                text += f"Total: {len(reviewed_data)} reports\n\n"
+                
+                for r in reviewed_data:
                     reviewed_date = r.get('reviewed_at', 'N/A')[:10] if r.get('reviewed_at') else 'N/A'
                     text += f"📋 ID: **{r['id']}** - {r['patient_name']} ({r['age']}y)\n"
                     text += f"   Date: {reviewed_date}\n\n"
