@@ -262,8 +262,13 @@ try:
                     if request.get('report_pdf_url'):
                         st.markdown("**📄 Report PDF**")
                         pdf_path = request['report_pdf_url']
-                        if os.path.exists(pdf_path):
-                            with open(pdf_path, 'rb') as pdf_file:
+                        
+                        # Convert to absolute path from project root
+                        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        absolute_pdf_path = os.path.join(project_root, pdf_path)
+                        
+                        if os.path.exists(absolute_pdf_path):
+                            with open(absolute_pdf_path, 'rb') as pdf_file:
                                 st.download_button(
                                     label="📥 Download Report PDF",
                                     data=pdf_file,

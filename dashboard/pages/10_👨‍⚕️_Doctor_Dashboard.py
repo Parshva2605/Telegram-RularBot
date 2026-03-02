@@ -341,28 +341,33 @@ else:
                             
                             # Download PDF button
                             pdf_path = report.get('report_pdf_url')
-                            if pdf_path and os.path.exists(pdf_path):
-                                with open(pdf_path, 'rb') as pdf_file:
-                                    pdf_data = pdf_file.read()
-                                    pdf_filename = os.path.basename(pdf_path)
-                                    
-                                    col1, col2 = st.columns([3, 1])
-                                    
-                                    with col1:
-                                        st.download_button(
-                                            label="📥 Download PDF Report",
-                                            data=pdf_data,
-                                            file_name=pdf_filename,
-                                            mime="application/pdf",
-                                            key=f"download_{report['id']}",
-                                            use_container_width=True
-                                        )
-                                    
-                                    with col2:
-                                        file_size = len(pdf_data) / 1024  # KB
-                                        st.info(f"💾 {file_size:.1f} KB")
-                            else:
-                                st.warning("⚠️ PDF file not found")
+                            if pdf_path:
+                                # Convert to absolute path from project root
+                                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                                absolute_pdf_path = os.path.join(project_root, pdf_path)
+                                
+                                if os.path.exists(absolute_pdf_path):
+                                    with open(absolute_pdf_path, 'rb') as pdf_file:
+                                        pdf_data = pdf_file.read()
+                                        pdf_filename = os.path.basename(pdf_path)
+                                        
+                                        col1, col2 = st.columns([3, 1])
+                                        
+                                        with col1:
+                                            st.download_button(
+                                                label="📥 Download PDF Report",
+                                                data=pdf_data,
+                                                file_name=pdf_filename,
+                                                mime="application/pdf",
+                                                key=f"download_{report['id']}",
+                                                use_container_width=True
+                                            )
+                                        
+                                        with col2:
+                                            file_size = len(pdf_data) / 1024  # KB
+                                            st.info(f"💾 {file_size:.1f} KB")
+                                else:
+                                    st.warning("⚠️ PDF file not found")
                             
                             if report.get('image_url') and os.path.exists(report.get('image_url')):
                                 st.markdown("**📸 X-Ray Image:**")
