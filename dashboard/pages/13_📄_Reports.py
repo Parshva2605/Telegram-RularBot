@@ -254,8 +254,12 @@ try:
                         pdf_path = pdf_path.replace('\\', os.sep).replace('/', os.sep)
                         
                         # Convert to absolute path from project root
-                        # Dashboard runs from dashboard/ folder, so go up one level
-                        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                        # Dashboard runs from dashboard/ folder, pages are in dashboard/pages/
+                        # So we need to go up 2 levels: pages -> dashboard -> project_root
+                        current_file = os.path.abspath(__file__)
+                        pages_dir = os.path.dirname(current_file)  # dashboard/pages
+                        dashboard_dir = os.path.dirname(pages_dir)  # dashboard
+                        project_root = os.path.dirname(dashboard_dir)  # project root
                         absolute_pdf_path = os.path.join(project_root, pdf_path)
                         
                         if os.path.exists(absolute_pdf_path):
