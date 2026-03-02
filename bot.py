@@ -1247,20 +1247,37 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'list_appointments':
         lang = context.user_data.get('language', 'en')
+    elif data == 'list_appointments':
+        lang = context.user_data.get('language', 'en')
         user_id = query.from_user.id
         
         try:
             if supabase and supabase_connected:
-                response = supabase.table('appointments').select('*').eq('user_id', user_id).execute()
-                appointments = response.data
+                # Get patient's scheduled appointments
+                response = supabase.table('appointments').select('*').eq('patient_telegram_id', user_id).eq('status', 'scheduled').execute()
+                appointments = response.data if response.data else []
                 
                 if appointments:
-                    text = TEXTS[lang]['list_appointments'] + '\n\n'
-                    for i, a in enumerate(appointments, 1):
-                        text += f"{i}. 📅 {a['date']} at {a['time']}\n   🏥 {a['hospital']}\n   📝 {a['notes']}\n\n"
-                    await query.message.reply_text(text, reply_markup=get_visit_keyboard(lang))
+                    # Sort by date
+                    appointments.sort(key=lambda x: x['appointment_date'])
+                    
+                    text = '📋 Your Upcoming Appointments:\n\n' if lang == 'en' else '📋 आपके आगामी अपॉइंटमेंट:\n\n' if lang == 'hi' else '📋 તમારી આગામી એપોઇન્ટમેન્ટ્સ:\n\n'
+                    
+                    for i, apt in enumerate(appointments, 1):
+                        from datetime import datetime
+                        date_obj = datetime.strptime(apt['appointment_date'], '%Y-%m-%d')
+                        display_date = date_obj.strftime('%d %B %Y')
+                        day_name = date_obj.strftime('%A')
+                        
+                        text += f"{i}. 📅 {display_date} ({day_name})\n"
+                        text += f"   👨‍⚕️ Dr. {apt['doctor_name']}\n"
+                        text += f"   🏥 {apt.get('doctor_phc', 'PHC')}\n"
+                        text += f"   📝 {apt['reason']}\n\n"
+                    
+                    await query.edit_message_text(text, reply_markup=get_visit_keyboard(lang), parse_mode='Markdown')
                 else:
-                    await query.message.reply_text(TEXTS[lang]['no_appointments'], reply_markup=get_visit_keyboard(lang))
+                    no_apt_text = '📭 No upcoming appointments.' if lang == 'en' else '📭 कोई आगामी अपॉइंटमेंट नहीं।' if lang == 'hi' else '📭 કોઈ આગામી એપોઇન્ટમેન્ટ નથી.'
+                    await query.edit_message_text(no_apt_text, reply_markup=get_visit_keyboard(lang))
             else:
                 await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
         except Exception as e:
@@ -1273,22 +1290,76 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         
         try:
             if supabase and supabase_connected:
-                response = supabase.table('appointments').select('*').eq('user_id', user_id).execute()
-                appointments = response.data
+                # Get patient's scheduled appointments
+                response = supabase.table('appointments').select('*').eq('patient_telegram_id', user_id).eq('status', 'scheduled').execute()
+                appointments = response.data if response.data else []
                 
                 if appointments:
-                    text = TEXTS[lang]['cancel_appointment_prompt'] + '\n\n'
-                    for i, a in enumerate(appointments, 1):
-                        text += f"{i}. {a['date']} - {a['hospital']}\n"
-                    context.user_data['state'] = 'waiting_appointment_cancel'
-                    await query.message.reply_text(text, reply_markup=ReplyKeyboardRemove())
+                    # Sort by date
+                    appointments.sort(key=lambda x: x['appointment_date'])
+                    
+                    # Create cancel buttons for each appointment
+                    keyboard = []
+                    for apt in appointments:
+                        from datetime import datetime
+                        date_obj = datetime.strptime(apt['appointment_date'], '%Y-%m-%d')
+                        display_date = date_obj.strftime('%d %b')
+                        
+                        button_text = f"❌ {display_date} - Dr. {apt['doctor_name']}"
+                        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"cancel_apt_{apt['id']}")])
+                    
+                    # Add back button
+                    back_text = '🔙 Back' if lang == 'en' else '🔙 वापस' if lang == 'hi' else '🔙 પાછા'
+                    keyboard.append([InlineKeyboardButton(back_text, callback_data='menu_visit')])
+                    
+                    cancel_text = '❌ Select appointment to cancel:' if lang == 'en' else '❌ रद्द करने के लिए अपॉइंटमेंट चुनें:' if lang == 'hi' else '❌ રદ કરવા માટે એપોઇન્ટમેન્ટ પસંદ કરો:'
+                    await query.edit_message_text(cancel_text, reply_markup=InlineKeyboardMarkup(keyboard))
                 else:
-                    await query.message.reply_text(TEXTS[lang]['no_appointments'], reply_markup=get_visit_keyboard(lang))
+                    no_apt_text = '📭 No appointments to cancel.' if lang == 'en' else '📭 रद्द करने के लिए कोई अपॉइंटमेंट नहीं।' if lang == 'hi' else '📭 રદ કરવા માટે કોઈ એપોઇન્ટમેન્ટ નથી.'
+                    await query.edit_message_text(no_apt_text, reply_markup=get_visit_keyboard(lang))
             else:
                 await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
         except Exception as e:
             logger.error(f"Cancel appointment error: {e}")
             await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+    
+    elif data.startswith('cancel_apt_'):
+        # Confirm cancellation
+        lang = context.user_data.get('language', 'en')
+        apt_id = int(data.replace('cancel_apt_', ''))
+        
+        try:
+            # Get appointment details
+            apt_response = supabase.table('appointments').select('*').eq('id', apt_id).execute()
+            if apt_response.data and len(apt_response.data) > 0:
+                apt = apt_response.data[0]
+                
+                # Update status to cancelled_by_patient
+                supabase.table('appointments').update({
+                    'status': 'cancelled_by_patient',
+                    'updated_at': 'now()'
+                }).eq('id', apt_id).execute()
+                
+                from datetime import datetime
+                date_obj = datetime.strptime(apt['appointment_date'], '%Y-%m-%d')
+                display_date = date_obj.strftime('%d %B %Y')
+                
+                success_text = f"✅ Appointment Cancelled\n\n📅 Date: {display_date}\n👨‍⚕️ Dr. {apt['doctor_name']}"
+                if lang == 'hi':
+                    success_text = f"✅ अपॉइंटमेंट रद्द हो गया\n\n📅 तारीख: {display_date}\n👨‍⚕️ डॉ. {apt['doctor_name']}"
+                elif lang == 'gu':
+                    success_text = f"✅ એપોઇન્ટમેન્ટ રદ થઈ\n\n📅 તારીખ: {display_date}\n👨‍⚕️ ડૉ. {apt['doctor_name']}"
+                
+                await query.edit_message_text(success_text, reply_markup=get_visit_keyboard(lang))
+                
+                # TODO: Notify doctor about cancellation (will implement in Phase 2)
+            else:
+                error_text = '❌ Appointment not found.' if lang == 'en' else '❌ अपॉइंटमेंट नहीं मिला।' if lang == 'hi' else '❌ એપોઇન્ટમેન્ટ મળી નથી.'
+                await query.edit_message_text(error_text, reply_markup=get_visit_keyboard(lang))
+        except Exception as e:
+            logger.error(f"Cancel appointment error: {e}")
+            error_text = '❌ Failed to cancel appointment.' if lang == 'en' else '❌ अपॉइंटमेंट रद्द करने में विफल।' if lang == 'hi' else '❌ એપોઇન્ટમેન્ટ રદ કરવામાં નિષ્ફળ.'
+            await query.edit_message_text(error_text, reply_markup=get_visit_keyboard(lang))
     
     elif data == 'search_city':
         lang = context.user_data.get('language', 'en')
@@ -1694,28 +1765,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await update.message.reply_text(TEXTS[lang]['xray_form_error'], reply_markup=ReplyKeyboardRemove())
         else:
             await update.message.reply_text(TEXTS[lang]['xray_form_error'], reply_markup=ReplyKeyboardRemove())
-    
-    elif state == 'waiting_appointment_cancel':
-        try:
-            appointment_num = int(text)
-            user_id = update.message.from_user.id
-            
-            if supabase and supabase_connected:
-                response = supabase.table('appointments').select('*').eq('user_id', user_id).execute()
-                appointments = response.data
-                
-                if 0 < appointment_num <= len(appointments):
-                    appointment_id = appointments[appointment_num - 1]['id']
-                    supabase.table('appointments').delete().eq('id', appointment_id).execute()
-                    await update.message.reply_text(TEXTS[lang]['appointment_cancelled'], reply_markup=get_visit_keyboard(lang))
-                else:
-                    await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_visit_keyboard(lang))
-            else:
-                await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
-        except:
-            await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_visit_keyboard(lang))
-        
-        context.user_data['state'] = None
     
     elif state == 'waiting_lmp_date':
         try:
