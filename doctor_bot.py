@@ -1110,7 +1110,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data == "my_dashboard":
             # Show doctor's personal statistics
             try:
-                # Get doctor's stats
+                # Fetch fresh doctor data from database to get latest rating and total_cases
+                fresh_doctor = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
+                if fresh_doctor.data and len(fresh_doctor.data) > 0:
+                    doctor_data = fresh_doctor.data[0]
+                else:
+                    doctor_data = doctor
+                
+                # Get doctor's stats from xray_requests
                 total_pending = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "pending").execute()
                 total_reviewed = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "reviewed").execute()
                 total_sent = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "sent").execute()
@@ -1120,17 +1127,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 sent_count = total_sent.count if total_sent else 0
                 total_cases = pending_count + reviewed_count + sent_count
                 
+                # Get rating from doctor table (updated by admin)
+                rating = doctor_data.get('rating', 0.0)
+                total_cases_db = doctor_data.get('total_cases', 0)
+                
                 text = f"📊 **MY DASHBOARD**\n\n"
-                text += f"👨‍⚕️ Dr. {doctor.get('name', 'Unknown')}\n"
+                text += f"👨‍⚕️ Dr. {doctor_data.get('name', 'Unknown')}\n"
                 text += f"📱 {phone}\n"
-                text += f"🏥 {doctor.get('phc', 'N/A')}\n"
-                text += f"🩺 MCI: {doctor.get('mci_reg', 'N/A')}\n\n"
+                text += f"🏥 {doctor_data.get('phc', 'N/A')}\n"
+                text += f"🩺 MCI: {doctor_data.get('mci_reg', 'N/A')}\n\n"
                 text += f"📈 **STATISTICS**\n"
                 text += f"🔴 Pending: {pending_count}\n"
                 text += f"✅ Reviewed: {reviewed_count}\n"
                 text += f"📤 Sent: {sent_count}\n"
-                text += f"📊 Total Cases: {total_cases}\n"
-                text += f"⭐ Rating: {doctor.get('rating', 0):.1f}/5.0\n\n"
+                text += f"📊 Total Cases: {total_cases_db}\n"
+                text += f"⭐ Rating: {rating:.1f}/5.0\n\n"
                 text += f"💡 Keep up the great work!"
                 
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
@@ -1430,6 +1441,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         }).eq("id", request_id).execute()
                         
                         logger.info(f"Request {request_id} marked as reviewed, report saved")
+                        
+                        # Update doctor's total_cases count
+                        try:
+                            # Get current total_cases
+                            current_total = doctor.get('total_cases', 0)
+                            new_total = current_total + 1
+                            
+                            supabase.table("doctors").update({
+                                "total_cases": new_total
+                            }).eq("telegram_id", user.id).execute()
+                            
+                            logger.info(f"Doctor {user.id} total_cases updated to {new_total}")
+                        except Exception as e:
+                            logger.error(f"Error updating doctor stats: {e}")
+                            
                     except Exception as e:
                         logger.error(f"Error updating request: {e}")
                 
