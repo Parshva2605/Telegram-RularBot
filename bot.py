@@ -1135,8 +1135,115 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     elif data == 'new_appointment':
         lang = context.user_data.get('language', 'en')
-        context.user_data['state'] = 'waiting_appointment_hospital'
-        await query.message.reply_text(TEXTS[lang]['appointment_hospital'], reply_markup=ReplyKeyboardRemove())
+        
+        # Fetch active doctors from database
+        try:
+            if supabase and supabase_connected:
+                doctors_response = supabase.table('doctors').select('phone, name, phc, active').eq('active', True).execute()
+                doctors = doctors_response.data if doctors_response.data else []
+                
+                if doctors:
+                    # Create doctor selection buttons
+                    keyboard = []
+                    for doctor in doctors:
+                        doctor_text = f"👨‍⚕️ Dr. {doctor['name']} - {doctor.get('phc', 'PHC')}"
+                        keyboard.append([InlineKeyboardButton(doctor_text, callback_data=f"select_doctor_{doctor['phone']}")])
+                    
+                    # Add back button
+                    back_text = '🔙 Back' if lang == 'en' else '🔙 वापस' if lang == 'hi' else '🔙 પાછા'
+                    keyboard.append([InlineKeyboardButton(back_text, callback_data='menu_visit')])
+                    
+                    select_text = '👨‍⚕️ Select a Doctor:' if lang == 'en' else '👨‍⚕️ डॉक्टर चुनें:' if lang == 'hi' else '👨‍⚕️ ડૉક્ટર પસંદ કરો:'
+                    await query.edit_message_text(select_text, reply_markup=InlineKeyboardMarkup(keyboard))
+                else:
+                    no_doctors_text = '❌ No doctors available at the moment.' if lang == 'en' else '❌ इस समय कोई डॉक्टर उपलब्ध नहीं है।' if lang == 'hi' else '❌ આ સમયે કોઈ ડૉક્ટર ઉપલબ્ધ નથી.'
+                    await query.edit_message_text(no_doctors_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('🔙 Back', callback_data='menu_visit')]]))
+            else:
+                await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+        except Exception as e:
+            logger.error(f"Error fetching doctors: {e}")
+            await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+    
+    elif data.startswith('select_doctor_'):
+        # Doctor selected, show next 10 days
+        lang = context.user_data.get('language', 'en')
+        doctor_phone = data.replace('select_doctor_', '')
+        
+        try:
+            # Get doctor details
+            doctor_response = supabase.table('doctors').select('*').eq('phone', doctor_phone).execute()
+            if doctor_response.data and len(doctor_response.data) > 0:
+                doctor = doctor_response.data[0]
+                
+                # Store doctor info in context
+                context.user_data['appointment_doctor_phone'] = doctor_phone
+                context.user_data['appointment_doctor_name'] = doctor['name']
+                context.user_data['appointment_doctor_phc'] = doctor.get('phc', 'PHC')
+                
+                # Generate next 10 days
+                from datetime import datetime, timedelta
+                today = datetime.now().date()
+                keyboard = []
+                
+                for i in range(1, 11):  # Next 10 days (skip today)
+                    date = today + timedelta(days=i)
+                    date_str = date.strftime('%Y-%m-%d')
+                    display_date = date.strftime('%d %b %Y')  # e.g., "05 Mar 2026"
+                    day_name = date.strftime('%A')  # e.g., "Monday"
+                    
+                    # Check if this date is already booked for this doctor
+                    check_response = supabase.table('appointments').select('id').eq('doctor_phone', doctor_phone).eq('appointment_date', date_str).eq('status', 'scheduled').execute()
+                    
+                    if check_response.data and len(check_response.data) > 0:
+                        # Date is booked
+                        button_text = f"❌ {display_date} ({day_name}) - Booked"
+                        keyboard.append([InlineKeyboardButton(button_text, callback_data='date_booked')])
+                    else:
+                        # Date is available
+                        button_text = f"✅ {display_date} ({day_name})"
+                        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"select_date_{date_str}")])
+                
+                # Add back button
+                back_text = '🔙 Back' if lang == 'en' else '🔙 वापस' if lang == 'hi' else '🔙 પાછા'
+                keyboard.append([InlineKeyboardButton(back_text, callback_data='new_appointment')])
+                
+                select_date_text = f"📅 Select Date for Dr. {doctor['name']}:\n\n✅ = Available\n❌ = Already Booked"
+                if lang == 'hi':
+                    select_date_text = f"📅 डॉ. {doctor['name']} के लिए तारीख चुनें:\n\n✅ = उपलब्ध\n❌ = बुक हो चुका"
+                elif lang == 'gu':
+                    select_date_text = f"📅 ડૉ. {doctor['name']} માટે તારીખ પસંદ કરો:\n\n✅ = ઉપલબ્ધ\n❌ = બુક થયેલ"
+                
+                await query.edit_message_text(select_date_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        except Exception as e:
+            logger.error(f"Error selecting doctor: {e}")
+            await query.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
+    
+    elif data == 'date_booked':
+        # User clicked on a booked date
+        lang = context.user_data.get('language', 'en')
+        await query.answer("❌ This date is already booked. Please select another date.", show_alert=True)
+    
+    elif data.startswith('select_date_'):
+        # Date selected, ask for reason
+        lang = context.user_data.get('language', 'en')
+        date_str = data.replace('select_date_', '')
+        
+        # Store date in context
+        context.user_data['appointment_date'] = date_str
+        context.user_data['state'] = 'waiting_appointment_reason'
+        
+        # Format date for display
+        from datetime import datetime
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+        display_date = date_obj.strftime('%d %B %Y')
+        
+        reason_text = f"📝 Appointment Details:\n\n👨‍⚕️ Doctor: Dr. {context.user_data['appointment_doctor_name']}\n📅 Date: {display_date}\n\nPlease type the reason for your appointment:"
+        if lang == 'hi':
+            reason_text = f"📝 अपॉइंटमेंट विवरण:\n\n👨‍⚕️ डॉक्टर: डॉ. {context.user_data['appointment_doctor_name']}\n📅 तारीख: {display_date}\n\nकृपया अपने अपॉइंटमेंट का कारण लिखें:"
+        elif lang == 'gu':
+            reason_text = f"📝 એપોઇન્ટમેન્ટ વિગતો:\n\n👨‍⚕️ ડૉક્ટર: ડૉ. {context.user_data['appointment_doctor_name']}\n📅 તારીખ: {display_date}\n\nકૃપા કરીને તમારી એપોઇન્ટમેન્ટનું કારણ લખો:"
+        
+        await query.message.reply_text(reason_text, reply_markup=ReplyKeyboardRemove())
     
     elif data == 'list_appointments':
         lang = context.user_data.get('language', 'en')
@@ -1439,49 +1546,71 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         context.user_data['state'] = None
     
-    elif state == 'waiting_appointment_hospital':
-        context.user_data['appointment_hospital'] = text
-        context.user_data['state'] = 'waiting_appointment_date'
-        await update.message.reply_text(TEXTS[lang]['appointment_date'])
-    
-    elif state == 'waiting_appointment_date':
-        context.user_data['appointment_date'] = text
-        context.user_data['state'] = 'waiting_appointment_time'
-        await update.message.reply_text(TEXTS[lang]['appointment_time'])
-    
-    elif state == 'waiting_appointment_time':
-        context.user_data['appointment_time'] = text
-        context.user_data['state'] = 'waiting_appointment_notes'
-        await update.message.reply_text(TEXTS[lang]['appointment_notes'])
-    
-    elif state == 'waiting_appointment_notes':
-        notes = text
-        hospital = context.user_data.get('appointment_hospital')
-        date = context.user_data.get('appointment_date')
-        time = context.user_data.get('appointment_time')
+    elif state == 'waiting_appointment_reason':
+        # Patient typed the reason for appointment
+        reason = text
+        doctor_phone = context.user_data.get('appointment_doctor_phone')
+        doctor_name = context.user_data.get('appointment_doctor_name')
+        doctor_phc = context.user_data.get('appointment_doctor_phc')
+        appointment_date = context.user_data.get('appointment_date')
         user_id = update.message.from_user.id
-        username = update.message.from_user.username or update.message.from_user.first_name or 'Unknown'
+        user_name = update.message.from_user.first_name or 'Patient'
+        
+        # Get patient phone and village if available
+        patient_phone = None
+        patient_village = None
+        try:
+            patient_response = supabase.table('patients').select('phone, village').eq('telegram_id', user_id).execute()
+            if patient_response.data and len(patient_response.data) > 0:
+                patient_phone = patient_response.data[0].get('phone')
+                patient_village = patient_response.data[0].get('village')
+        except:
+            pass
         
         try:
             if supabase and supabase_connected:
+                # Create appointment in database
                 appointment_data = {
-                    'user_id': user_id,
-                    'username': username,
-                    'hospital': hospital,
-                    'date': date,
-                    'time': time,
-                    'notes': notes,
+                    'patient_telegram_id': user_id,
+                    'patient_name': user_name,
+                    'patient_phone': patient_phone,
+                    'patient_village': patient_village,
+                    'doctor_phone': doctor_phone,
+                    'doctor_name': doctor_name,
+                    'doctor_phc': doctor_phc,
+                    'appointment_date': appointment_date,
+                    'reason': reason,
+                    'status': 'scheduled',
                     'reminder_sent': False
                 }
-                supabase.table('appointments').insert(appointment_data).execute()
                 
-                response = TEXTS[lang]['appointment_booked'].format(hospital, date, time, notes)
-                await update.message.reply_text(response, reply_markup=get_visit_keyboard(lang))
+                result = supabase.table('appointments').insert(appointment_data).execute()
+                
+                if result.data:
+                    # Format date for display
+                    from datetime import datetime
+                    date_obj = datetime.strptime(appointment_date, '%Y-%m-%d')
+                    display_date = date_obj.strftime('%d %B %Y')
+                    
+                    # Success message
+                    success_text = f"✅ Appointment Booked!\n\n👨‍⚕️ Doctor: Dr. {doctor_name}\n🏥 PHC: {doctor_phc}\n📅 Date: {display_date}\n📝 Reason: {reason}\n\n🔔 You will be reminded 1 day before."
+                    if lang == 'hi':
+                        success_text = f"✅ अपॉइंटमेंट बुक हो गया!\n\n👨‍⚕️ डॉक्टर: डॉ. {doctor_name}\n🏥 PHC: {doctor_phc}\n📅 तारीख: {display_date}\n📝 कारण: {reason}\n\n🔔 आपको 1 दिन पहले याद दिलाया जाएगा।"
+                    elif lang == 'gu':
+                        success_text = f"✅ એપોઇન્ટમેન્ટ બુક થઈ!\n\n👨‍⚕️ ડૉક્ટર: ડૉ. {doctor_name}\n🏥 PHC: {doctor_phc}\n📅 તારીખ: {display_date}\n📝 કારણ: {reason}\n\n🔔 તમને 1 દિવસ પહેલા યાદ અપાવવામાં આવશે."
+                    
+                    await update.message.reply_text(success_text, reply_markup=get_visit_keyboard(lang))
+                    
+                    # TODO: Send notification to doctor (will implement in Phase 2)
+                    
+                else:
+                    await update.message.reply_text(TEXTS[lang]['appointment_error'], reply_markup=get_main_menu_keyboard(lang))
             else:
-                await update.message.reply_text(TEXTS[lang]['appointment_error'], reply_markup=get_main_menu_keyboard(lang))
+                await update.message.reply_text(TEXTS[lang]['error'], reply_markup=get_main_menu_keyboard(lang))
         except Exception as e:
             logger.error(f"Appointment save error: {e}")
-            await update.message.reply_text(TEXTS[lang]['appointment_error'], reply_markup=get_main_menu_keyboard(lang))
+            error_text = "❌ Failed to book appointment. This date may already be booked." if lang == 'en' else "❌ अपॉइंटमेंट बुक करने में विफल। यह तारीख पहले से बुक हो सकती है।" if lang == 'hi' else "❌ એપોઇન્ટમેન્ટ બુક કરવામાં નિષ્ફળ. આ તારીખ પહેલેથી બુક થઈ શકે છે."
+            await update.message.reply_text(error_text, reply_markup=get_main_menu_keyboard(lang))
         
         context.user_data['state'] = None
     
