@@ -1110,38 +1110,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data == "my_dashboard":
             # Show doctor's personal statistics
             try:
-                # Fetch fresh doctor data from database to get latest rating and total_cases
+                # Fetch fresh doctor data from database to get latest rating
                 fresh_doctor = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
                 if fresh_doctor.data and len(fresh_doctor.data) > 0:
                     doctor_data = fresh_doctor.data[0]
                 else:
                     doctor_data = doctor
                 
-                # Get doctor's stats from xray_requests (manual counting)
+                # Get doctor's REAL-TIME stats from xray_requests (manual counting)
                 pending_requests = supabase.table("xray_requests").select("id").eq("doctor_phone", phone).eq("status", "pending").execute()
                 reviewed_requests = supabase.table("xray_requests").select("id").eq("doctor_phone", phone).eq("status", "reviewed").execute()
-                sent_requests = supabase.table("xray_requests").select("id").eq("doctor_phone", phone).eq("status", "sent").execute()
                 
                 pending_count = len(pending_requests.data) if pending_requests.data else 0
                 reviewed_count = len(reviewed_requests.data) if reviewed_requests.data else 0
-                sent_count = len(sent_requests.data) if sent_requests.data else 0
+                total_count = pending_count + reviewed_count
                 
-                # Get rating and total_cases from doctor table (updated by admin and auto-increment)
+                # Get rating from doctor table (updated by admin)
                 rating = doctor_data.get('rating', 0.0)
-                total_cases_db = doctor_data.get('total_cases', 0)
                 
                 text = f"📊 **MY DASHBOARD**\n\n"
                 text += f"👨‍⚕️ Dr. {doctor_data.get('name', 'Unknown')}\n"
                 text += f"📱 {phone}\n"
-                text += f"🏥 {doctor_data.get('phc', 'N/A')}\n"
-                text += f"🩺 MCI: {doctor_data.get('mci_reg', 'N/A')}\n\n"
+                text += f"🏥 {doctor_data.get('phc', 'N/A')}\n\n"
                 text += f"📈 **STATISTICS**\n"
                 text += f"🔴 Pending: {pending_count}\n"
                 text += f"✅ Reviewed: {reviewed_count}\n"
-                text += f"📤 Sent: {sent_count}\n"
-                text += f"📊 Total Cases: {total_cases_db}\n"
-                text += f"⭐ Rating: {rating:.1f}/5.0\n\n"
-                text += f"💡 Keep up the great work!"
+                text += f"📊 Total: {total_count}\n\n"
+                text += f"⭐ **Rating:** {rating:.1f}/5.0\n\n"
+                text += f"━━━━━━━━━━━━━━━━━━━━\n"
+                text += f"💡 For detailed analytics, visit the\n"
+                text += f"Doctor Dashboard on the website"
                 
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
                 await query.edit_message_text(
@@ -1440,20 +1438,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         }).eq("id", request_id).execute()
                         
                         logger.info(f"Request {request_id} marked as reviewed, report saved")
-                        
-                        # Update doctor's total_cases count
-                        try:
-                            # Get current total_cases
-                            current_total = doctor.get('total_cases', 0)
-                            new_total = current_total + 1
-                            
-                            supabase.table("doctors").update({
-                                "total_cases": new_total
-                            }).eq("telegram_id", user.id).execute()
-                            
-                            logger.info(f"Doctor {user.id} total_cases updated to {new_total}")
-                        except Exception as e:
-                            logger.error(f"Error updating doctor stats: {e}")
                             
                     except Exception as e:
                         logger.error(f"Error updating request: {e}")
