@@ -1117,17 +1117,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     doctor_data = doctor
                 
-                # Get doctor's stats from xray_requests
-                total_pending = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "pending").execute()
-                total_reviewed = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "reviewed").execute()
-                total_sent = supabase.table("xray_requests").select("*", count='exact').eq("doctor_phone", phone).eq("status", "sent").execute()
+                # Get doctor's stats from xray_requests (manual counting)
+                pending_requests = supabase.table("xray_requests").select("id").eq("doctor_phone", phone).eq("status", "pending").execute()
+                reviewed_requests = supabase.table("xray_requests").select("id").eq("doctor_phone", phone).eq("status", "reviewed").execute()
+                sent_requests = supabase.table("xray_requests").select("id").eq("doctor_phone", phone).eq("status", "sent").execute()
                 
-                pending_count = total_pending.count if total_pending else 0
-                reviewed_count = total_reviewed.count if total_reviewed else 0
-                sent_count = total_sent.count if total_sent else 0
-                total_cases = pending_count + reviewed_count + sent_count
+                pending_count = len(pending_requests.data) if pending_requests.data else 0
+                reviewed_count = len(reviewed_requests.data) if reviewed_requests.data else 0
+                sent_count = len(sent_requests.data) if sent_requests.data else 0
                 
-                # Get rating from doctor table (updated by admin)
+                # Get rating and total_cases from doctor table (updated by admin and auto-increment)
                 rating = doctor_data.get('rating', 0.0)
                 total_cases_db = doctor_data.get('total_cases', 0)
                 
