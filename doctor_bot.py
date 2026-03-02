@@ -656,10 +656,51 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     
     else:
-        # Unknown message
-        await update.message.reply_text(
-            "❓ I don't understand. Use /start to begin."
-        )
+        # Check if doctor is trying to download a report by ID
+        if text.strip().isdigit():
+            request_id = int(text.strip())
+            
+            try:
+                # Get report path from database
+                request = supabase.table("xray_requests").select("report_pdf_url, patient_name").eq("id", request_id).execute()
+                
+                if request.data and len(request.data) > 0:
+                    report_path = request.data[0].get('report_pdf_url')
+                    patient_name = request.data[0].get('patient_name')
+                    
+                    if report_path and os.path.exists(report_path):
+                        # Send PDF to doctor
+                        await update.message.reply_text(f"📄 Sending report for {patient_name}...")
+                        
+                        with open(report_path, 'rb') as pdf_file:
+                            await update.message.reply_document(
+                                document=pdf_file,
+                                filename=os.path.basename(report_path),
+                                caption=f"📄 Report for {patient_name} (ID: {request_id})"
+                            )
+                        
+                        # Show main menu
+                        await show_main_menu(update.message.chat_id, context)
+                    else:
+                        await update.message.reply_text(
+                            f"❌ Report file not found for ID: {request_id}\n\n"
+                            f"The report may not have been generated yet."
+                        )
+                else:
+                    await update.message.reply_text(
+                        f"❌ No report found with ID: {request_id}\n\n"
+                        f"Please check the ID and try again."
+                    )
+            except Exception as e:
+                logger.error(f"Error downloading report: {e}")
+                await update.message.reply_text(
+                    f"❌ Error downloading report: {str(e)}"
+                )
+        else:
+            # Unknown message
+            await update.message.reply_text(
+                "❓ I don't understand. Use /start to begin."
+            )
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle photo uploads for X-ray analysis"""
@@ -951,11 +992,10 @@ async def process_request_analysis(query, context):
 async def show_main_menu(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     """Show main doctor menu"""
     keyboard = [
-        [InlineKeyboardButton("📥 Requests", callback_data="requests"), 
-         InlineKeyboardButton("📋 My Queue", callback_data="queue")],
+        [InlineKeyboardButton("📥 Requests", callback_data="requests")],
         [InlineKeyboardButton("🩻 Analyze Image", callback_data="analyze")],
         [InlineKeyboardButton("📊 My Dashboard", callback_data="my_dashboard")],
-        [InlineKeyboardButton("📋 Old Reports", callback_data="old_reports")],
+        [InlineKeyboardButton("📄 Reports", callback_data="reports")],
         [InlineKeyboardButton("🔐 Regen Code", callback_data="regen_code_btn")],
         [InlineKeyboardButton("🚪 Logout", callback_data="logout")]
     ]
@@ -994,33 +1034,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         doctor = doctors.data[0]
         phone = doctor['phone']
         
-        if query.data == "queue":
-            # Show pending X-rays assigned to this doctor
-            requests = supabase.table("xray_requests").select(
-                "id, patient_name, age, village, symptoms, status, created_at"
-            ).eq("doctor_phone", phone).eq("status", "pending").order("created_at", desc=True).limit(10).execute()
-            
-            if requests.data and len(requests.data) > 0:
-                text = "📋 **MY QUEUE**\n\n"
-                for r in requests.data:
-                    symptoms_short = r['symptoms'][:60] + "..." if r['symptoms'] and len(r['symptoms']) > 60 else (r['symptoms'] or 'No symptoms')
-                    text += f"🔴 **#{r['id']}** {r['patient_name']} ({r['age']}y) - {r.get('village', 'N/A')}\n"
-                    text += f"   {symptoms_short}\n\n"
-                
-                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
-                await query.edit_message_text(
-                    text + "👆 Note the ID to analyze specific case",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode='Markdown'
-                )
-            else:
-                keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
-                await query.edit_message_text(
-                    "✅ No pending X-rays in your queue!\n\nAll cases reviewed.",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-        
-        elif query.data == "requests":
+        if query.data == "requests":
             # Show NEW pending X-ray requests with images and analyze button
             requests = supabase.table("xray_requests").select(
                 "id, patient_name, age, village, symptoms, image_url, status, created_at"
@@ -1291,18 +1305,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode='Markdown'
             )
         
-        elif query.data == "old_reports":
-            # Show reviewed cases
+        elif query.data == "reports":
+            # Show ALL patients with available reports (not just this doctor's)
             reviewed = supabase.table("xray_requests").select(
-                "id, patient_name, age, status, reviewed_at"
-            ).eq("doctor_phone", phone).eq("status", "reviewed").order("reviewed_at", desc=True).limit(10).execute()
+                "id, patient_name, age, reviewed_at, doctor_phone"
+            ).eq("status", "reviewed").not_.is_("report_pdf_url", "null").order("reviewed_at", desc=True).limit(50).execute()
             
             if reviewed.data and len(reviewed.data) > 0:
-                text = "📋 **OLD REPORTS**\n\n"
+                text = "📄 **AVAILABLE REPORTS**\n\n"
+                text += f"Total: {len(reviewed.data)} reports\n\n"
+                
                 for r in reviewed.data:
-                    text += f"✅ **{r['patient_name']}** ({r['age']}y)\n"
-                    text += f"   Reviewed: {r.get('reviewed_at', 'N/A')}\n"
-                    text += f"   ID: {r['id']}\n\n"
+                    reviewed_date = r.get('reviewed_at', 'N/A')[:10] if r.get('reviewed_at') else 'N/A'
+                    text += f"📋 ID: **{r['id']}** - {r['patient_name']} ({r['age']}y)\n"
+                    text += f"   Date: {reviewed_date}\n\n"
+                
+                text += "\n💡 **To download a report:**\n"
+                text += "Type the patient ID number\n"
+                text += "Example: 15"
                 
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
                 await query.edit_message_text(
@@ -1313,7 +1333,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]]
                 await query.edit_message_text(
-                    "📭 No reviewed reports yet.",
+                    "📭 No reports available yet.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
         
