@@ -1,7 +1,11 @@
 -- Appointments Table for MediMind
 -- One appointment per doctor per day
 
-CREATE TABLE IF NOT EXISTS appointments (
+-- Drop table if exists (for clean setup)
+DROP TABLE IF EXISTS appointments CASCADE;
+
+-- Create appointments table
+CREATE TABLE appointments (
   id SERIAL PRIMARY KEY,
   patient_telegram_id BIGINT NOT NULL,
   patient_name TEXT NOT NULL,
@@ -18,16 +22,16 @@ CREATE TABLE IF NOT EXISTS appointments (
   reminder_sent BOOLEAN DEFAULT FALSE,
   
   -- Ensure only one appointment per doctor per day
-  UNIQUE(doctor_phone, appointment_date)
+  CONSTRAINT unique_doctor_date UNIQUE(doctor_phone, appointment_date)
 );
 
--- Index for faster queries
-CREATE INDEX IF NOT EXISTS idx_appointments_doctor_date ON appointments(doctor_phone, appointment_date);
-CREATE INDEX IF NOT EXISTS idx_appointments_patient ON appointments(patient_telegram_id);
-CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
-CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
+-- Create indexes for faster queries
+CREATE INDEX idx_appointments_doctor_date ON appointments(doctor_phone, appointment_date);
+CREATE INDEX idx_appointments_patient ON appointments(patient_telegram_id);
+CREATE INDEX idx_appointments_status ON appointments(status);
+CREATE INDEX idx_appointments_date ON appointments(appointment_date);
 
--- Comments
+-- Add comments
 COMMENT ON TABLE appointments IS 'Patient appointments with doctors - one per doctor per day';
 COMMENT ON COLUMN appointments.status IS 'scheduled, completed, cancelled_by_patient, cancelled_by_doctor';
 COMMENT ON COLUMN appointments.reminder_sent IS 'Whether reminder was sent 1 day before appointment';
