@@ -20,8 +20,9 @@ st.set_page_config(
 )
 
 # Check login
-if 'logged_in' not in st.session_state or not st.session_state.logged_in:
-    st.error("❌ Please login first")
+if 'doctor_logged_in' not in st.session_state or not st.session_state.doctor_logged_in:
+    st.error("❌ Please login first from Doctor Dashboard page")
+    st.info("👉 Go to 'Doctor Dashboard' page to login")
     st.stop()
 
 # Initialize Supabase

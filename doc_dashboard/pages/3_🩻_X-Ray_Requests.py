@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-X-Ray Requests Management - Admin Panel
-View, manage, and monitor all X-ray requests
+X-Ray Requests Management - Doctor Panel
+View, manage, and monitor X-ray requests assigned to you
 """
 
 import streamlit as st
@@ -13,14 +13,19 @@ import sys
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from supabase_wrapper import create_client
-from telegram_helper import send_reminder_sync, send_message_sync, send_bulk_reminders_sync
 
 # Page config
 st.set_page_config(
-    page_title="X-Ray Requests - MediMind Admin",
+    page_title="X-Ray Requests - MediMind Doctor",
     page_icon="🩻",
     layout="wide"
 )
+
+# Check login
+if 'doctor_logged_in' not in st.session_state or not st.session_state.doctor_logged_in:
+    st.error("❌ Please login first from Doctor Dashboard page")
+    st.info("👉 Go to 'Doctor Dashboard' page to login")
+    st.stop()
 
 # Initialize Supabase
 @st.cache_resource

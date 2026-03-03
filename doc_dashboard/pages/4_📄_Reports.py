@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Reports Management - Admin Panel
-View all generated PDF reports from all doctors
+Reports Management - Doctor Panel
+View all generated PDF reports
 """
 
 import streamlit as st
@@ -20,10 +20,16 @@ from supabase_wrapper import create_client
 
 # Page config
 st.set_page_config(
-    page_title="Reports - MediMind Admin",
+    page_title="Reports - MediMind Doctor",
     page_icon="📄",
     layout="wide"
 )
+
+# Check login
+if 'doctor_logged_in' not in st.session_state or not st.session_state.doctor_logged_in:
+    st.error("❌ Please login first from Doctor Dashboard page")
+    st.info("👉 Go to 'Doctor Dashboard' page to login")
+    st.stop()
 
 # Initialize Supabase
 @st.cache_resource

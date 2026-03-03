@@ -130,27 +130,28 @@ if not st.session_state.doctor_logged_in:
 else:
     doctor = st.session_state.doctor_data
     
-    # Sidebar
+    # Sidebar - Only logout button
     with st.sidebar:
-        st.markdown(f"""
-        <div class="doctor-card">
-            <h3>👨‍⚕️ {st.session_state.doctor_name}</h3>
-            <p>📱 {st.session_state.doctor_phone}</p>
-            <p>🏥 {doctor.get('phc', 'N/A')}</p>
-            <p>🩺 MCI: {doctor.get('mci_reg', 'N/A')}</p>
-            <p>⭐ Rating: {doctor.get('rating', 0):.1f}/5.0</p>
-            <p>📊 Cases: {doctor.get('total_cases', 0)}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
         if st.button("🚪 Logout", use_container_width=True):
             logout()
             st.rerun()
     
     # Main content
     st.title("🩻 MediMind Doctor Dashboard")
+    
+    # Doctor details card
+    st.markdown(f"""
+    <div class="doctor-card">
+        <h3>👨‍⚕️ {st.session_state.doctor_name}</h3>
+        <p>📱 {st.session_state.doctor_phone}</p>
+        <p>🏥 {doctor.get('phc', 'N/A')}</p>
+        <p>🩺 MCI: {doctor.get('mci_reg', 'N/A')}</p>
+        <p>⭐ Rating: {doctor.get('rating', 0):.1f}/5.0</p>
+        <p>📊 Cases: {doctor.get('total_cases', 0)}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
     
     # Tabs
     tab1, tab2, tab3 = st.tabs(["📋 Live Queue", "📊 My Reports", "📈 Statistics"])
