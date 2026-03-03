@@ -52,9 +52,17 @@ st.markdown("""
     [data-testid="stSidebar"] {
         background-color: #262730;
     }
+    /* Hide the collapse arrow completely */
+    [data-testid="stSidebarNavCollapseIcon"] {
+        display: none !important;
+    }
     /* Make sidebar navigation always visible */
     [data-testid="stSidebarNav"] {
         max-height: none !important;
+    }
+    /* Hide the collapse button */
+    button[kind="header"] {
+        display: none !important;
     }
     /* Position logout button at bottom */
     .sidebar-logout {

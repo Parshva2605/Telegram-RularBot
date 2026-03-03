@@ -44,6 +44,14 @@ st.markdown("""
     [data-testid="stSidebarNav"] {
         max-height: none !important;
     }
+    /* Hide the collapse arrow completely */
+    [data-testid="stSidebarNavCollapseIcon"] {
+        display: none !important;
+    }
+    /* Hide the collapse button */
+    button[kind="header"] {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

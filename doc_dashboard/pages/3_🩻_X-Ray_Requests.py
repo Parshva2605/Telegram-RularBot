@@ -27,6 +27,8 @@ st.markdown("""
     .main {background-color: #0e1117;}
     [data-testid="stSidebar"] {background-color: #262730;}
     [data-testid="stSidebarNav"] {max-height: none !important;}
+    [data-testid="stSidebarNavCollapseIcon"] {display: none !important;}
+    button[kind="header"] {display: none !important;}
 </style>
 """, unsafe_allow_html=True)
 
