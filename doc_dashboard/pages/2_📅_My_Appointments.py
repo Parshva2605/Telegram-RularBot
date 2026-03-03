@@ -27,6 +27,50 @@ st.markdown("""
     [data-testid="stSidebarNav"] {max-height: none !important;}
     [data-testid="stSidebarNavCollapseIcon"] {display: none !important;}
     button[kind="header"] {display: none !important;}
+    
+    /* Calendar styling */
+    .calendar-day {
+        background-color: #1e1e1e;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        min-height: 80px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        border: 1px solid #333;
+    }
+    .calendar-day-number {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .calendar-day-today {
+        background-color: #2e7d32;
+        border: 2px solid #4caf50;
+    }
+    .calendar-day-appointment {
+        background-color: #1565c0;
+        border: 2px solid #1e88e5;
+    }
+    .calendar-day-empty {
+        background-color: transparent;
+        border: none;
+    }
+    .calendar-patient-name {
+        font-size: 11px;
+        margin-top: 5px;
+        color: #fff;
+    }
+    .day-header {
+        font-weight: bold;
+        text-align: center;
+        padding: 10px;
+        background-color: #262730;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -50,14 +94,12 @@ st.markdown(f"### Dr. {st.session_state.doctor_name}")
 
 # Get current month and year
 today = datetime.now()
-current_month = today.month
-current_year = today.year
 
 # Month selector
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     selected_date = st.date_input(
-        "Select Month",
+        "📆 Select Month",
         value=today,
         min_value=datetime(2024, 1, 1),
         max_value=datetime(2030, 12, 31)
@@ -69,12 +111,6 @@ try:
     phone = st.session_state.doctor_phone
     
     # Get appointments for selected month
-    first_day = datetime(selected_year, selected_month, 1)
-    if selected_month == 12:
-        last_day = datetime(selected_year + 1, 1, 1) - timedelta(days=1)
-    else:
-        last_day = datetime(selected_year, selected_month + 1, 1) - timedelta(days=1)
-    
     appointments_response = supabase.table("appointments").select("*").eq("doctor_phone", phone).eq("status", "scheduled").execute()
     
     all_appointments = appointments_response.data if appointments_response.data else []
@@ -86,18 +122,19 @@ try:
         if apt_date.month == selected_month and apt_date.year == selected_year:
             month_appointments.append(apt)
     
-    # Create calendar grid
-    st.markdown(f"### 📆 {calendar.month_name[selected_month]} {selected_year}")
+    st.markdown("---")
+    st.markdown(f"## 📆 {calendar.month_name[selected_month]} {selected_year}")
+    st.markdown("")
     
     # Get calendar matrix
     cal = calendar.monthcalendar(selected_year, selected_month)
     
     # Day headers
-    days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     cols = st.columns(7)
     for i, day in enumerate(days):
         with cols[i]:
-            st.markdown(f"**{day}**")
+            st.markdown(f'<div class="day-header">{day[:3]}</div>', unsafe_allow_html=True)
     
     # Calendar grid
     for week in cal:
@@ -105,30 +142,57 @@ try:
         for i, day in enumerate(week):
             with cols[i]:
                 if day == 0:
-                    st.markdown("")
+                    # Empty cell
+                    st.markdown('<div class="calendar-day calendar-day-empty" style="min-height: 80px;"></div>', unsafe_allow_html=True)
                 else:
                     # Check if this day has appointment
                     day_date = datetime(selected_year, selected_month, day).strftime('%Y-%m-%d')
                     day_appointments = [apt for apt in month_appointments if apt['appointment_date'] == day_date]
                     
+                    # Check if today
+                    is_today = (day == today.day and selected_month == today.month and selected_year == today.year)
+                    
                     if day_appointments:
-                        # Highlight day with appointment
+                        # Day with appointment
                         apt = day_appointments[0]
+                        patient_name = apt['patient_name']
+                        if len(patient_name) > 10:
+                            patient_name = patient_name[:10] + "..."
+                        
                         st.markdown(f"""
-                        <div style='background-color: #1e88e5; padding: 10px; border-radius: 5px; text-align: center;'>
-                            <div style='font-size: 20px; font-weight: bold;'>{day}</div>
-                            <div style='font-size: 12px;'>👤 {apt['patient_name']}</div>
+                        <div class="calendar-day calendar-day-appointment">
+                            <div class="calendar-day-number">{day}</div>
+                            <div class="calendar-patient-name">👤 {patient_name}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif is_today:
+                        # Today
+                        st.markdown(f"""
+                        <div class="calendar-day calendar-day-today">
+                            <div class="calendar-day-number">{day}</div>
+                            <div class="calendar-patient-name">Today</div>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
                         # Regular day
-                        is_today = (day == today.day and selected_month == today.month and selected_year == today.year)
-                        bg_color = '#2e7d32' if is_today else '#424242'
                         st.markdown(f"""
-                        <div style='background-color: {bg_color}; padding: 10px; border-radius: 5px; text-align: center;'>
-                            <div style='font-size: 20px;'>{day}</div>
+                        <div class="calendar-day">
+                            <div class="calendar-day-number">{day}</div>
                         </div>
                         """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Legend
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown("🔵 **Blue** = Appointment")
+    with col2:
+        st.markdown("🟢 **Green** = Today")
+    with col3:
+        st.markdown("⚫ **Gray** = Regular Day")
+    with col4:
+        st.metric("📊 Total", len(month_appointments))
     
     st.markdown("---")
     
@@ -144,7 +208,7 @@ try:
             display_date = date_obj.strftime('%d %B %Y')
             day_name = date_obj.strftime('%A')
             
-            with st.expander(f"📅 {display_date} ({day_name}) - {apt['patient_name']}"):
+            with st.expander(f"📅 {display_date} ({day_name}) - {apt['patient_name']}", expanded=False):
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"**👤 Patient:** {apt['patient_name']}")
@@ -158,10 +222,6 @@ try:
                     st.markdown(f"**🆔 ID:** {apt['id']}")
     else:
         st.info(f"📭 No appointments scheduled for {calendar.month_name[selected_month]} {selected_year}")
-    
-    # Show total count
-    st.markdown("---")
-    st.metric("📊 Total Appointments This Month", len(month_appointments))
 
 except Exception as e:
     st.error(f"❌ Error loading appointments: {e}")
