@@ -719,10 +719,58 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"❌ Error downloading report: {str(e)}"
                 )
         else:
-            # Unknown message
-            await update.message.reply_text(
-                "❓ I don't understand. Use /start to begin."
-            )
+            # Check if doctor is reporting an issue
+            if context.user_data.get('doctor_issue_state') == 'waiting_description':
+                description = text
+                
+                try:
+                    # Get doctor info
+                    doctors = supabase.table("doctors").select("*").eq("telegram_id", user.id).execute()
+                    doctor_name = doctors.data[0].get('name', 'Unknown') if doctors.data else 'Unknown'
+                    doctor_phone = doctors.data[0].get('phone', 'N/A') if doctors.data else 'N/A'
+                    doctor_phc = doctors.data[0].get('phc', 'N/A') if doctors.data else 'N/A'
+                    
+                    # Save issue to database
+                    issue_data = {
+                        'user_id': user.id,
+                        'username': user.username or user.first_name or 'Unknown',
+                        'name': doctor_name,
+                        'category': 'Doctor',  # Mark as doctor issue
+                        'age': 0,  # Not applicable for doctors
+                        'description': description,
+                        'phone': doctor_phone,
+                        'phc': doctor_phc,
+                        'status': 'pending'
+                    }
+                    
+                    supabase.table('issues').insert(issue_data).execute()
+                    
+                    await update.message.reply_text(
+                        "✅ **ISSUE REPORTED SUCCESSFULLY**\n\n"
+                        "Your issue has been forwarded to admin.\n\n"
+                        "You will be contacted soon.\n\n"
+                        "Thank you for reporting!",
+                        parse_mode='Markdown'
+                    )
+                    
+                    # Clear state and show main menu
+                    context.user_data['doctor_issue_state'] = None
+                    await show_main_menu(update.message.chat_id, context)
+                    
+                    logger.info(f"Doctor issue reported by {doctor_name} (ID: {user.id})")
+                    
+                except Exception as e:
+                    logger.error(f"Error saving doctor issue: {e}")
+                    await update.message.reply_text(
+                        "❌ Failed to submit issue. Please try again.",
+                        parse_mode='Markdown'
+                    )
+                    context.user_data['doctor_issue_state'] = None
+            else:
+                # Unknown message
+                await update.message.reply_text(
+                    "❓ I don't understand. Use /start to begin."
+                )
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle photo uploads for X-ray analysis"""
@@ -1019,6 +1067,7 @@ async def show_main_menu(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 My Dashboard", callback_data="my_dashboard")],
         [InlineKeyboardButton("📅 Appointments", callback_data="appointments")],
         [InlineKeyboardButton("📄 Reports", callback_data="reports")],
+        [InlineKeyboardButton("🆘 Report Issue", callback_data="report_issue")],
         [InlineKeyboardButton("🔐 Regen Code", callback_data="regen_code_btn")],
         [InlineKeyboardButton("🚪 Logout", callback_data="logout")]
     ]
@@ -1430,6 +1479,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "📭 No scheduled appointments.\n\nPatients can book appointments through the patient bot.",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
+        
+        elif query.data == "report_issue":
+            # Doctor wants to report an issue
+            context.user_data['doctor_issue_state'] = 'waiting_description'
+            await query.message.reply_text(
+                "🆘 **REPORT ISSUE**\n\n"
+                "Please describe the issue or problem you're facing:\n\n"
+                "Example: Unable to upload X-ray images, System is slow, etc.",
+                parse_mode='Markdown'
+            )
         
         elif query.data == "regen_code_btn":
             # Generate new access code
