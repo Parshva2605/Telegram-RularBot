@@ -39,7 +39,7 @@ st.markdown("""
         font-size: 24px !important;
         font-weight: bold !important;
         border-radius: 8px !important;
-        margin: 2px 0 !important;
+        margin: 3px 0 !important;
     }
     
     /* Logout button at bottom */
@@ -149,7 +149,7 @@ try:
     cols = st.columns(7)
     for i, day in enumerate(days):
         with cols[i]:
-            st.markdown(f"<div style='text-align: center; font-weight: bold; padding: 10px; background-color: #262730; border-radius: 5px; margin-bottom: 10px;'>{day}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: center; font-weight: bold; padding: 10px; background-color: #262730; border-radius: 5px; margin-bottom: 5px;'>{day}</div>", unsafe_allow_html=True)
     
     # Calendar grid
     for week_idx, week in enumerate(cal):
@@ -157,8 +157,8 @@ try:
         for day_idx, day in enumerate(week):
             with cols[day_idx]:
                 if day == 0:
-                    # Empty cell
-                    st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
+                    # Empty cell with same height as buttons
+                    st.markdown("<div style='height: 86px; margin: 3px 0;'></div>", unsafe_allow_html=True)
                 else:
                     # Check if this day has appointment
                     day_date = datetime(selected_year, selected_month, day).strftime('%Y-%m-%d')
