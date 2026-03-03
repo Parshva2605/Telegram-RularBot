@@ -45,7 +45,8 @@ st.markdown("""
         font-size: 24px !important;
         font-weight: bold !important;
         border-radius: 8px !important;
-        margin: 3px 0 !important;
+        margin-top: 6px !important;
+        margin-bottom: 0 !important;
     }
     
     /* Logout button at bottom */
@@ -168,7 +169,7 @@ try:
                 with cols[day_idx]:
                     if day == 0:
                         # Empty cell with same height as buttons
-                        st.markdown("<div style='height: 86px; margin: 3px 0;'></div>", unsafe_allow_html=True)
+                        st.markdown("<div style='height: 86px; margin-top: 6px; margin-bottom: 0;'></div>", unsafe_allow_html=True)
                     else:
                         # Check if this day has appointment
                         day_date = datetime(selected_year, selected_month, day).strftime('%Y-%m-%d')
