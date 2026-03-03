@@ -56,13 +56,19 @@ st.markdown("""
     [data-testid="stSidebarNavCollapseIcon"] {
         display: none !important;
     }
-    /* Make sidebar navigation always visible */
+    /* Make sidebar navigation always visible - no scroll */
     [data-testid="stSidebarNav"] {
         max-height: none !important;
+        overflow: visible !important;
     }
     /* Hide the collapse button */
     button[kind="header"] {
         display: none !important;
+    }
+    /* Remove padding from sidebar nav items */
+    [data-testid="stSidebarNav"] ul {
+        max-height: none !important;
+        overflow: visible !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -153,7 +159,6 @@ else:
     
     # Sidebar - Logout button
     with st.sidebar:
-        st.markdown("---")
         if st.button("🚪 Logout", use_container_width=True, type="secondary"):
             logout()
             st.rerun()

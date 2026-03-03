@@ -26,7 +26,8 @@ st.markdown("""
 <style>
     .main {background-color: #0e1117;}
     [data-testid="stSidebar"] {background-color: #262730;}
-    [data-testid="stSidebarNav"] {max-height: none !important;}
+    [data-testid="stSidebarNav"] {max-height: none !important; overflow: visible !important;}
+    [data-testid="stSidebarNav"] ul {max-height: none !important; overflow: visible !important;}
     [data-testid="stSidebarNavCollapseIcon"] {display: none !important;}
     button[kind="header"] {display: none !important;}
     /* Logout button at bottom */
@@ -55,7 +56,6 @@ def logout():
 
 # Sidebar - Logout button
 with st.sidebar:
-    st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True, type="secondary", key="logout_xray"):
         logout()
         st.rerun()
