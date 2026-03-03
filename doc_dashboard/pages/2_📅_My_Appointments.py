@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from supabase_wrapper import create_client
-import pandas as pd
 from datetime import datetime, timedelta
 import calendar
 
@@ -28,54 +27,21 @@ st.markdown("""
     [data-testid="stSidebarNavCollapseIcon"] {display: none !important;}
     button[kind="header"] {display: none !important;}
     
-    /* Calendar styling */
-    .calendar-day {
-        background-color: #1e1e1e;
-        padding: 20px;
-        border-radius: 8px;
-        text-align: center;
-        height: 100px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        border: 1px solid #333;
-        cursor: pointer;
-        transition: all 0.3s ease;
+    /* Remove default streamlit padding */
+    .block-container {
+        padding-top: 2rem;
     }
-    .calendar-day:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    
+    /* Calendar day button styling */
+    div[data-testid="column"] > div > div > div > button {
+        width: 100% !important;
+        height: 80px !important;
+        font-size: 24px !important;
+        font-weight: bold !important;
+        border-radius: 8px !important;
+        margin: 2px 0 !important;
     }
-    .calendar-day-number {
-        font-size: 28px;
-        font-weight: bold;
-    }
-    .calendar-day-today {
-        background-color: #2e7d32;
-        border: 2px solid #4caf50;
-    }
-    .calendar-day-appointment {
-        background-color: #1565c0;
-        border: 2px solid #1e88e5;
-    }
-    .calendar-day-empty {
-        background-color: transparent;
-        border: none;
-        cursor: default;
-    }
-    .calendar-day-empty:hover {
-        transform: none;
-        box-shadow: none;
-    }
-    .day-header {
-        font-weight: bold;
-        text-align: center;
-        padding: 12px;
-        background-color: #262730;
-        border-radius: 5px;
-        margin-bottom: 15px;
-        font-size: 16px;
-    }
+    
     /* Logout button at bottom */
     .sidebar-logout {
         position: fixed;
@@ -161,20 +127,20 @@ try:
     cal = calendar.monthcalendar(selected_year, selected_month)
     
     # Day headers
-    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
     cols = st.columns(7)
     for i, day in enumerate(days):
         with cols[i]:
-            st.markdown(f'<div class="day-header">{day[:3]}</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align: center; font-weight: bold; padding: 10px; background-color: #262730; border-radius: 5px; margin-bottom: 10px;'>{day}</div>", unsafe_allow_html=True)
     
-    # Calendar grid with clickable dates
-    for week in cal:
+    # Calendar grid
+    for week_idx, week in enumerate(cal):
         cols = st.columns(7)
-        for i, day in enumerate(week):
-            with cols[i]:
+        for day_idx, day in enumerate(week):
+            with cols[day_idx]:
                 if day == 0:
                     # Empty cell
-                    st.markdown('<div class="calendar-day calendar-day-empty" style="height: 100px;"></div>', unsafe_allow_html=True)
+                    st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
                 else:
                     # Check if this day has appointment
                     day_date = datetime(selected_year, selected_month, day).strftime('%Y-%m-%d')
@@ -183,42 +149,28 @@ try:
                     # Check if today
                     is_today = (day == today.day and selected_month == today.month and selected_year == today.year)
                     
-                    # Determine style
+                    # Determine button type and color
                     if has_appointment:
-                        css_class = "calendar-day calendar-day-appointment"
-                    elif is_today:
-                        css_class = "calendar-day calendar-day-today"
-                    else:
-                        css_class = "calendar-day"
-                    
-                    # Create clickable button
-                    if has_appointment:
-                        if st.button(f"{day}", key=f"day_{day_date}", use_container_width=True):
+                        button_type = "primary"
+                        if st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, type=button_type):
                             st.session_state.selected_appointment_date = day_date
-                        st.markdown(f"""
-                        <div class="{css_class}">
-                            <div class="calendar-day-number">{day}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                            st.rerun()
+                    elif is_today:
+                        button_type = "secondary"
+                        st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, type=button_type, disabled=True)
                     else:
-                        st.markdown(f"""
-                        <div class="{css_class}">
-                            <div class="calendar-day-number">{day}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, disabled=True)
     
     st.markdown("---")
     
     # Legend
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("🔵 **Blue** = Appointment")
+        st.markdown("🔵 **Blue** = Appointment (Click to view)")
     with col2:
         st.markdown("🟢 **Green** = Today")
     with col3:
-        st.markdown("⚫ **Gray** = Regular Day")
-    with col4:
-        st.metric("📊 Total", len(month_appointments))
+        st.metric("📊 Total Appointments", len(month_appointments))
     
     st.markdown("---")
     
@@ -229,37 +181,43 @@ try:
         display_date = date_obj.strftime('%d %B %Y')
         day_name = date_obj.strftime('%A')
         
-        st.markdown("### 📋 Selected Appointment Details")
+        st.markdown("### 📋 Appointment Details")
         
+        # Appointment card
         st.markdown(f"""
         <div style='background: linear-gradient(135deg, #1565c0 0%, #1e88e5 100%); 
-                    padding: 20px; border-radius: 10px; color: white; margin-bottom: 20px;'>
-            <h3>📅 {display_date} ({day_name})</h3>
+                    padding: 25px; border-radius: 12px; color: white; margin-bottom: 20px;'>
+            <h2 style='margin: 0 0 10px 0;'>📅 {display_date}</h2>
+            <h3 style='margin: 0; opacity: 0.9;'>{day_name}</h3>
         </div>
         """, unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**👤 Patient Name:** {apt['patient_name']}")
-            st.markdown(f"**🎂 Age:** {apt.get('patient_age', 'N/A')}")
+            st.markdown("#### 👤 Patient Information")
+            st.markdown(f"**Name:** {apt['patient_name']}")
             if apt.get('patient_phone'):
-                st.markdown(f"**📱 Phone:** {apt['patient_phone']}")
+                st.markdown(f"**Phone:** {apt['patient_phone']}")
             if apt.get('patient_village'):
-                st.markdown(f"**📍 Village:** {apt['patient_village']}")
-        with col2:
-            st.markdown(f"**📝 Reason:** {apt.get('reason', 'Not specified')}")
-            st.markdown(f"**🕐 Booked On:** {apt.get('created_at', 'N/A')[:10]}")
-            st.markdown(f"**🆔 Appointment ID:** {apt['id']}")
-            st.markdown(f"**📊 Status:** {apt.get('status', 'scheduled').upper()}")
+                st.markdown(f"**Village:** {apt['patient_village']}")
         
-        if st.button("❌ Clear Selection"):
+        with col2:
+            st.markdown("#### 📝 Appointment Information")
+            st.markdown(f"**Reason:** {apt.get('reason', 'Not specified')}")
+            st.markdown(f"**Booked On:** {apt.get('created_at', 'N/A')[:10]}")
+            st.markdown(f"**Status:** {apt.get('status', 'scheduled').upper()}")
+            st.markdown(f"**ID:** {apt['id']}")
+        
+        if st.button("❌ Close Details", type="secondary"):
             del st.session_state.selected_appointment_date
             st.rerun()
+        
+        st.markdown("---")
     
     # List all appointments
-    st.markdown("### 📋 All Appointments This Month")
-    
     if month_appointments:
+        st.markdown("### 📋 All Appointments This Month")
+        
         # Sort by date
         month_appointments.sort(key=lambda x: x['appointment_date'])
         
