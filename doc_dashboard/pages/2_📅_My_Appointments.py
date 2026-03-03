@@ -155,21 +155,17 @@ try:
                         if st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, type=button_type):
                             st.session_state.selected_appointment_date = day_date
                             st.rerun()
-                    elif is_today:
-                        button_type = "secondary"
-                        st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, type=button_type, disabled=True)
                     else:
+                        # Regular day (including today) - no special highlight
                         st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, disabled=True)
     
     st.markdown("---")
     
     # Legend
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.markdown("🔵 **Blue** = Appointment (Click to view)")
     with col2:
-        st.markdown("🟢 **Green** = Today")
-    with col3:
         st.metric("📊 Total Appointments", len(month_appointments))
     
     st.markdown("---")
