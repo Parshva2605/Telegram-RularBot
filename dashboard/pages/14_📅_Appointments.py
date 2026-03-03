@@ -54,6 +54,16 @@ try:
     appointments_response = supabase.table("appointments").select("*").order("appointment_date", desc=False).execute()
     all_appointments = appointments_response.data if appointments_response.data else []
     
+    # Get all doctors to map phone to name
+    doctors_response = supabase.table('doctors').select('phone, name, phc').execute()
+    doctors_dict = {d['phone']: {'name': d['name'], 'phc': d.get('phc', 'N/A')} for d in doctors_response.data} if doctors_response.data else {}
+    
+    # Add doctor names to appointments
+    for apt in all_appointments:
+        doctor_info = doctors_dict.get(apt['doctor_phone'], {'name': 'Unknown', 'phc': 'N/A'})
+        apt['doctor_name'] = doctor_info['name']
+        apt['doctor_phc'] = doctor_info['phc']
+    
     # Apply filters
     filtered_appointments = all_appointments
     
