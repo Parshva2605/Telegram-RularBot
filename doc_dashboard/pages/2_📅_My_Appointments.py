@@ -97,10 +97,21 @@ with col2:
         "📆 Select Month",
         value=today,
         min_value=datetime(2024, 1, 1),
-        max_value=datetime(2030, 12, 31)
+        max_value=datetime(2030, 12, 31),
+        key="month_selector"
     )
     selected_month = selected_date.month
     selected_year = selected_date.year
+
+# Clear selected appointment when month changes
+if 'last_selected_month' not in st.session_state:
+    st.session_state.last_selected_month = selected_month
+    st.session_state.last_selected_year = selected_year
+elif st.session_state.last_selected_month != selected_month or st.session_state.last_selected_year != selected_year:
+    if 'selected_appointment_date' in st.session_state:
+        del st.session_state.selected_appointment_date
+    st.session_state.last_selected_month = selected_month
+    st.session_state.last_selected_year = selected_year
 
 try:
     phone = st.session_state.doctor_phone
@@ -120,7 +131,14 @@ try:
             appointments_by_date[apt['appointment_date']] = apt
     
     st.markdown("---")
-    st.markdown(f"## 📆 {calendar.month_name[selected_month]} {selected_year}")
+    
+    # Show today's date and selected month
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"### 📅 Today: {today.strftime('%d %B %Y (%A)')}")
+    with col2:
+        st.markdown(f"### 📆 Viewing: {calendar.month_name[selected_month]} {selected_year}")
+    
     st.markdown("")
     
     # Get calendar matrix
