@@ -32,6 +32,12 @@ st.markdown("""
         padding-top: 2rem;
     }
     
+    /* Remove extra spacing between column groups */
+    div[data-testid="column"] {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
     /* Calendar day button styling */
     div[data-testid="column"] > div > div > div > button {
         width: 100% !important;
@@ -144,38 +150,42 @@ try:
     # Get calendar matrix
     cal = calendar.monthcalendar(selected_year, selected_month)
     
-    # Day headers
-    days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    cols = st.columns(7)
-    for i, day in enumerate(days):
-        with cols[i]:
-            st.markdown(f"<div style='text-align: center; font-weight: bold; padding: 10px; background-color: #262730; border-radius: 5px; margin-bottom: 5px;'>{day}</div>", unsafe_allow_html=True)
+    # Create calendar container to control spacing
+    calendar_container = st.container()
     
-    # Calendar grid
-    for week_idx, week in enumerate(cal):
+    with calendar_container:
+        # Day headers
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         cols = st.columns(7)
-        for day_idx, day in enumerate(week):
-            with cols[day_idx]:
-                if day == 0:
-                    # Empty cell with same height as buttons
-                    st.markdown("<div style='height: 86px; margin: 3px 0;'></div>", unsafe_allow_html=True)
-                else:
-                    # Check if this day has appointment
-                    day_date = datetime(selected_year, selected_month, day).strftime('%Y-%m-%d')
-                    has_appointment = day_date in appointments_by_date
-                    
-                    # Check if today
-                    is_today = (day == today.day and selected_month == today.month and selected_year == today.year)
-                    
-                    # Determine button type and color
-                    if has_appointment:
-                        button_type = "primary"
-                        if st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, type=button_type):
-                            st.session_state.selected_appointment_date = day_date
-                            st.rerun()
+        for i, day in enumerate(days):
+            with cols[i]:
+                st.markdown(f"<div style='text-align: center; font-weight: bold; padding: 10px; background-color: #262730; border-radius: 5px; margin-bottom: 3px;'>{day}</div>", unsafe_allow_html=True)
+        
+        # Calendar grid
+        for week_idx, week in enumerate(cal):
+            cols = st.columns(7)
+            for day_idx, day in enumerate(week):
+                with cols[day_idx]:
+                    if day == 0:
+                        # Empty cell with same height as buttons
+                        st.markdown("<div style='height: 86px; margin: 3px 0;'></div>", unsafe_allow_html=True)
                     else:
-                        # Regular day (including today) - no special highlight
-                        st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, disabled=True)
+                        # Check if this day has appointment
+                        day_date = datetime(selected_year, selected_month, day).strftime('%Y-%m-%d')
+                        has_appointment = day_date in appointments_by_date
+                        
+                        # Check if today
+                        is_today = (day == today.day and selected_month == today.month and selected_year == today.year)
+                        
+                        # Determine button type and color
+                        if has_appointment:
+                            button_type = "primary"
+                            if st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, type=button_type):
+                                st.session_state.selected_appointment_date = day_date
+                                st.rerun()
+                        else:
+                            # Regular day (including today) - no special highlight
+                            st.button(str(day), key=f"day_{week_idx}_{day_idx}", use_container_width=True, disabled=True)
     
     st.markdown("---")
     
