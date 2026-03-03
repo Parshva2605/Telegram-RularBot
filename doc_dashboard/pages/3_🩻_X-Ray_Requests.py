@@ -53,14 +53,12 @@ def logout():
     st.session_state.doctor_name = None
     st.session_state.doctor_data = None
 
-# Sidebar - Logout button at bottom
+# Sidebar - Logout button
 with st.sidebar:
-    st.markdown("<br>" * 25, unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-logout">', unsafe_allow_html=True)
+    st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True, type="secondary", key="logout_xray"):
         logout()
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # Initialize Supabase
 @st.cache_resource

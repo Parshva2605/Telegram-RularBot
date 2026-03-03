@@ -64,14 +64,6 @@ st.markdown("""
     button[kind="header"] {
         display: none !important;
     }
-    /* Logout button at bottom */
-    .sidebar-logout {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        width: calc(16rem - 40px);
-        z-index: 999;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -109,14 +101,8 @@ if not st.session_state.doctor_logged_in:
     col1, col2 = st.columns(2)
     
     with col1:
-        # Phone number input with +91 prefix
-        col_prefix, col_number = st.columns([1, 3])
-        with col_prefix:
-            st.text_input("Prefix", value="+91", disabled=True, label_visibility="collapsed", key="phone_prefix")
-        with col_number:
-            phone_number = st.text_input("📱 Phone Number", placeholder="9876543210", help="Enter 10-digit mobile number", key="phone_input")
-        
-        # Combine prefix with number
+        phone_number = st.text_input("📱 Phone Number", placeholder="9876543210", help="Enter 10-digit mobile number (without +91)")
+        # Automatically add +91 prefix
         if phone_number:
             phone = "+91" + phone_number
         else:
@@ -165,16 +151,12 @@ if not st.session_state.doctor_logged_in:
 else:
     doctor = st.session_state.doctor_data
     
-    # Sidebar - Logout button at bottom
+    # Sidebar - Logout button
     with st.sidebar:
-        # Add spacer to push logout to bottom
-        st.markdown("<br>" * 20, unsafe_allow_html=True)
-        
-        st.markdown('<div class="sidebar-logout">', unsafe_allow_html=True)
+        st.markdown("---")
         if st.button("🚪 Logout", use_container_width=True, type="secondary"):
             logout()
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     
     # Main content
     st.title("🩻 MediMind Doctor Dashboard")
