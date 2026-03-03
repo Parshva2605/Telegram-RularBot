@@ -48,6 +48,21 @@ st.markdown("""
         margin: 10px 0;
         color: white;
     }
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #262730;
+    }
+    /* Make sidebar navigation always visible */
+    [data-testid="stSidebarNav"] {
+        max-height: none !important;
+    }
+    /* Position logout button at bottom */
+    .sidebar-logout {
+        position: fixed;
+        bottom: 20px;
+        width: calc(100% - 40px);
+        padding: 0 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -130,11 +145,16 @@ if not st.session_state.doctor_logged_in:
 else:
     doctor = st.session_state.doctor_data
     
-    # Sidebar - Only logout button
+    # Sidebar - Logout button at bottom
     with st.sidebar:
-        if st.button("🚪 Logout", use_container_width=True):
+        # Add spacer to push logout to bottom
+        st.markdown("<br>" * 20, unsafe_allow_html=True)
+        
+        st.markdown('<div class="sidebar-logout">', unsafe_allow_html=True)
+        if st.button("🚪 Logout", use_container_width=True, type="secondary"):
             logout()
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # Main content
     st.title("🩻 MediMind Doctor Dashboard")

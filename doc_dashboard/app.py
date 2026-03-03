@@ -36,6 +36,14 @@ st.markdown("""
     h1 {
         color: #1e88e5;
     }
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background-color: #262730;
+    }
+    /* Make sidebar navigation always visible */
+    [data-testid="stSidebarNav"] {
+        max-height: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 

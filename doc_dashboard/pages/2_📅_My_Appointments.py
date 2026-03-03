@@ -19,6 +19,15 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS
+st.markdown("""
+<style>
+    .main {background-color: #0e1117;}
+    [data-testid="stSidebar"] {background-color: #262730;}
+    [data-testid="stSidebarNav"] {max-height: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
 # Check login
 if 'doctor_logged_in' not in st.session_state or not st.session_state.doctor_logged_in:
     st.error("❌ Please login first from Doctor Dashboard page")
