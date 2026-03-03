@@ -109,7 +109,18 @@ if not st.session_state.doctor_logged_in:
     col1, col2 = st.columns(2)
     
     with col1:
-        phone = st.text_input("📱 Phone Number", placeholder="+919876543210", help="Enter your registered phone number")
+        # Phone number input with +91 prefix
+        col_prefix, col_number = st.columns([1, 3])
+        with col_prefix:
+            st.text_input("Prefix", value="+91", disabled=True, label_visibility="collapsed", key="phone_prefix")
+        with col_number:
+            phone_number = st.text_input("📱 Phone Number", placeholder="9876543210", help="Enter 10-digit mobile number", key="phone_input")
+        
+        # Combine prefix with number
+        if phone_number:
+            phone = "+91" + phone_number
+        else:
+            phone = ""
     
     with col2:
         code = st.text_input("🔐 Access Code", type="password", placeholder="X7K9P2M4", help="8-character code from Telegram bot")
