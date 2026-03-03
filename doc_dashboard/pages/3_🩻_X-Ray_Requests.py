@@ -29,6 +29,14 @@ st.markdown("""
     [data-testid="stSidebarNav"] {max-height: none !important;}
     [data-testid="stSidebarNavCollapseIcon"] {display: none !important;}
     button[kind="header"] {display: none !important;}
+    /* Logout button at bottom */
+    .sidebar-logout {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        width: calc(16rem - 40px);
+        z-index: 999;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -37,6 +45,22 @@ if 'doctor_logged_in' not in st.session_state or not st.session_state.doctor_log
     st.error("❌ Please login first from Doctor Dashboard page")
     st.info("👉 Go to 'Doctor Dashboard' page to login")
     st.stop()
+
+# Logout function
+def logout():
+    st.session_state.doctor_logged_in = False
+    st.session_state.doctor_phone = None
+    st.session_state.doctor_name = None
+    st.session_state.doctor_data = None
+
+# Sidebar - Logout button at bottom
+with st.sidebar:
+    st.markdown("<br>" * 25, unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-logout">', unsafe_allow_html=True)
+    if st.button("🚪 Logout", use_container_width=True, type="secondary", key="logout_xray"):
+        logout()
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Initialize Supabase
 @st.cache_resource

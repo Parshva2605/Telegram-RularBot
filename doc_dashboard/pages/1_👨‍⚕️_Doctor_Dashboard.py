@@ -64,12 +64,13 @@ st.markdown("""
     button[kind="header"] {
         display: none !important;
     }
-    /* Position logout button at bottom */
+    /* Logout button at bottom */
     .sidebar-logout {
         position: fixed;
         bottom: 20px;
-        width: calc(100% - 40px);
-        padding: 0 20px;
+        left: 20px;
+        width: calc(16rem - 40px);
+        z-index: 999;
     }
 </style>
 """, unsafe_allow_html=True)
